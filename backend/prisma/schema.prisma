@@ -1,0 +1,136 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String    @id @default(uuid())
+  name         String
+  email        String?   @unique
+  phone        String?   @unique
+  passwordHash String?
+  googleId     String?   @unique
+  role         String    @default("CUSTOMER") // CUSTOMER | ADMIN
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  addresses    Address[]
+  orders       Order[]
+}
+
+model Address {
+  id             String        @id @default(uuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName       String
+  phone          String
+  deliveryZoneId String?
+  deliveryZone   DeliveryZone? @relation(fields: [deliveryZoneId], references: [id], onDelete: SetNull)
+  streetAddress  String
+  landmark       String?
+  isDefault      Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+}
+
+model Vegetable {
+  id          String           @id @default(uuid())
+  name        String           // e.g. "Tamatar (Fresh Red Tomatoes)"
+  slug        String           @unique
+  description String
+  pricePerKg  Float            // In PKR
+  isAvailable Boolean          @default(true)
+  isFeatured  Boolean          @default(false)
+  isOffer     Boolean          @default(false)
+  offerPrice  Float?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  images      VegetableImage[]
+  orderItems  OrderItem[]
+}
+
+model VegetableImage {
+  id           String    @id @default(uuid())
+  vegetableId  String
+  vegetable    Vegetable @relation(fields: [vegetableId], references: [id], onDelete: Cascade)
+  url          String
+  thumbnailUrl String?
+  isPrimary    Boolean   @default(false)
+  orderIndex   Int       @default(0)
+  createdAt    DateTime  @default(now())
+}
+
+model DeliveryZone {
+  id                    String    @id @default(uuid())
+  areaName              String    @unique
+  deliveryFee           Float     @default(0)
+  minOrderAmount        Float     @default(0)
+  estimatedDeliveryTime String    @default("30-45 mins")
+  isActive              Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  addresses             Address[]
+  orders                Order[]
+}
+
+model Order {
+  id              Int           @id @default(autoincrement()) // Human readable order number e.g. 1001
+  uuid            String        @unique @default(uuid())
+  userId          String?
+  user            User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // Customer snapshot
+  customerName    String
+  customerPhone   String
+  deliveryAddress String
+  deliveryZoneId  String?
+  deliveryZone    DeliveryZone? @relation(fields: [deliveryZoneId], references: [id], onDelete: SetNull)
+  deliveryNotes   String?
+
+  subtotal        Float
+  deliveryFee     Float
+  grandTotal      Float
+
+  paymentMethod   String        @default("COD") // COD | ADVANCE_ONLINE | CARD
+  paymentStatus   String        @default("PENDING") // PENDING | PAID | FAILED | REFUNDED | COD
+  paymentTxnRef   String?
+
+  orderStatus     String        @default("NEW") // NEW | CONFIRMED | PREPARING | OUT_FOR_DELIVERY | DELIVERED | CANCELLED
+  whatsappSent    Boolean       @default(false)
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  items           OrderItem[]
+}
+
+model OrderItem {
+  id             String     @id @default(uuid())
+  orderId        Int
+  order          Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  vegetableId    String?
+  vegetable      Vegetable? @relation(fields: [vegetableId], references: [id], onDelete: SetNull)
+
+  vegetableName  String
+  vegetableImage String?
+  pricePerKg     Float
+
+  weightDisplay  String     // "250g", "500g", "1kg", "2kg", "5kg", "10kg", or "15.5kg Custom"
+  weightInKg     Float      // 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 15.5
+  unitPrice      Float      @default(0) // Price for one unit of this weight (PKR)
+  quantity       Int        @default(1)
+  itemTotal      Float
+}
+
+model Setting {
+  key         String   @id
+  value       String
+  group       String   @default("general")
+  description String?
+  updatedAt   DateTime @updatedAt
+}
