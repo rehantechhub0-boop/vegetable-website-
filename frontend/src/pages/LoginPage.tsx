@@ -58,7 +58,23 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
   const handleGoogleClick = async () => {
     setError(null);
-    setGoogleNotice('Google OAuth client configuration is pending in the environment (GOOGLE_CLIENT_ID). Please login with your email and password, or continue as guest.');
+    setGoogleNotice(null);
+    try {
+      const res = await fetch('/api/v1/auth/google');
+      const data = await res.json();
+      if (res.ok && data.success && data.authUrl) {
+        window.location.href = data.authUrl;
+      } else {
+        setGoogleNotice(
+          data.error ||
+          'Google Sign-In is not configured yet on this server. Please use Email login or continue as guest.'
+        );
+      }
+    } catch {
+      setGoogleNotice(
+        'Unable to connect to Google authentication service. Please login with Email or continue as guest.'
+      );
+    }
   };
 
   return (

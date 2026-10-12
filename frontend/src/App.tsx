@@ -129,24 +129,29 @@ export default function App() {
   /* ── Routing state ──────────────────────────────────────────────
      Supports: '/' | '/vegetables' | '/vegetables/:slug' | '/cart' | '/checkout' | '/order-success' | '/login' | '/register' | '/account'
   ─────────────────────────────────────────────────────────────── */
-  const parseRoute = (pathname: string): { path: string; slug: string | null } => {
+  const parseRoute = (pathname: string): { path: string; slug: string | null; orderNumber: string | null } => {
     const parts = pathname.split('/').filter(Boolean);
     if (parts[0] === 'vegetables' && parts[1]) {
-      return { path: '/vegetables/:slug', slug: parts[1] };
+      return { path: '/vegetables/:slug', slug: parts[1], orderNumber: null };
     }
-    if (parts[0] === 'vegetables') return { path: '/vegetables', slug: null };
-    if (parts[0] === 'cart') return { path: '/cart', slug: null };
-    if (parts[0] === 'checkout') return { path: '/checkout', slug: null };
-    if (parts[0] === 'order-success') return { path: '/order-success', slug: null };
-    if (parts[0] === 'login') return { path: '/login', slug: null };
-    if (parts[0] === 'register') return { path: '/register', slug: null };
-    if (parts[0] === 'account') return { path: '/account', slug: null };
-    return { path: '/', slug: null };
+    if (parts[0] === 'vegetables') return { path: '/vegetables', slug: null, orderNumber: null };
+    if (parts[0] === 'cart') return { path: '/cart', slug: null, orderNumber: null };
+    if (parts[0] === 'checkout') return { path: '/checkout', slug: null, orderNumber: null };
+    if (parts[0] === 'order-success') return { path: '/order-success', slug: null, orderNumber: null };
+    if (parts[0] === 'login') return { path: '/login', slug: null, orderNumber: null };
+    if (parts[0] === 'register') return { path: '/register', slug: null, orderNumber: null };
+    if (parts[0] === 'account') {
+      if (parts[1] === 'orders' && parts[2]) {
+        return { path: '/account/orders/:orderNumber', slug: null, orderNumber: parts[2] };
+      }
+      return { path: '/account', slug: null, orderNumber: null };
+    }
+    return { path: '/', slug: null, orderNumber: null };
   };
 
-  const [currentRoute, setCurrentRoute] = useState<{ path: string; slug: string | null }>(() => {
+  const [currentRoute, setCurrentRoute] = useState<{ path: string; slug: string | null; orderNumber: string | null }>(() => {
     if (typeof window !== 'undefined') return parseRoute(window.location.pathname);
-    return { path: '/', slug: null };
+    return { path: '/', slug: null, orderNumber: null };
   });
 
   const currentPath = currentRoute.path;
@@ -177,7 +182,7 @@ export default function App() {
   const navigateToProduct = (slug: string) => {
     const path = `/vegetables/${slug}`;
     window.history.pushState({}, '', path);
-    setCurrentRoute({ path: '/vegetables/:slug', slug });
+    setCurrentRoute({ path: '/vegetables/:slug', slug, orderNumber: null });
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
@@ -192,6 +197,19 @@ export default function App() {
   /* Auth state */
   const authUser = useAuthStore((s) => s.user);
   const checkAuth = useAuthStore((s) => s.checkAuth);
+  const logout = useAuthStore((s) => s.logout);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   /* Load store data + check auth on mount */
   useEffect(() => {
@@ -439,19 +457,80 @@ export default function App() {
               {cartCount > 0 ? `Rs. ${cartTotal.toLocaleString()}` : 'Cart'}
             </button>
 
-            <button
-              type="button"
-              className="nav-icon-btn"
-              aria-label={authUser ? 'My Account' : 'Sign In'}
-              onClick={() => navigate(authUser ? '/account' : '/login')}
-              style={{
-                borderColor: authUser ? 'var(--primary-400)' : undefined,
-                backgroundColor: authUser ? 'var(--primary-50)' : undefined,
-              }}
-            >
-              {authUser ? <User size={17} /> : <LogIn size={17} />}
-              {authUser ? authUser.name.split(' ')[0] : 'Sign In'}
-            </button>
+            {authUser ? (
+              <div className="nav-user-dropdown-wrap" ref={userMenuRef}>
+                <button
+                  type="button"
+                  className={`nav-user-trigger-btn ${userMenuOpen ? 'active' : ''}`}
+                  onClick={() => setUserMenuOpen((p) => !p)}
+                  aria-expanded={userMenuOpen}
+                  aria-label="User Account Menu"
+                >
+                  <User size={16} />
+                  <span>{authUser.name.split(' ')[0]}</span>
+                  <ChevronDown
+                    size={13}
+                    style={{
+                      transform: userMenuOpen ? 'rotate(180deg)' : 'none',
+                      transition: 'transform 0.2s ease',
+                    }}
+                  />
+                </button>
+
+                {userMenuOpen && (
+                  <div className="nav-user-dropdown-menu" role="menu">
+                    <button
+                      type="button"
+                      className="nav-dropdown-item"
+                      role="menuitem"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        navigate('/account');
+                      }}
+                    >
+                      <User size={15} />
+                      <span>My Account</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="nav-dropdown-item"
+                      role="menuitem"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        navigate('/account');
+                      }}
+                    >
+                      <ShoppingBag size={15} />
+                      <span>My Orders</span>
+                    </button>
+                    <div className="nav-dropdown-divider" />
+                    <button
+                      type="button"
+                      className="nav-dropdown-item danger-item"
+                      role="menuitem"
+                      onClick={async () => {
+                        setUserMenuOpen(false);
+                        await logout();
+                        navigate('/');
+                      }}
+                    >
+                      <LogIn size={15} style={{ transform: 'rotate(180deg)' }} />
+                      <span>Logout</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="nav-icon-btn"
+                aria-label="Login"
+                onClick={() => navigate('/login')}
+              >
+                <LogIn size={17} />
+                <span>Login</span>
+              </button>
+            )}
 
             {/* Mobile menu toggle */}
             <button
@@ -515,15 +594,75 @@ export default function App() {
                   Cart ({cartCount}) <ChevronDown size={15} />
                 </a>
               </li>
-              <li>
-                <a
-                  href={authUser ? '/account' : '/login'}
-                  className="mobile-nav-link"
-                  onClick={(e) => { e.preventDefault(); setMobileNavOpen(false); navigate(authUser ? '/account' : '/login'); }}
-                >
-                  {authUser ? `Account (${authUser.name.split(' ')[0]})` : 'Sign In'} <ChevronDown size={15} />
-                </a>
-              </li>
+              {authUser ? (
+                <>
+                  <li>
+                    <a
+                      href="/account"
+                      className="mobile-nav-link"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setMobileNavOpen(false);
+                        navigate('/account');
+                      }}
+                    >
+                      My Account ({authUser.name.split(' ')[0]}) <ChevronDown size={15} />
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      href="/account"
+                      className="mobile-nav-link"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setMobileNavOpen(false);
+                        navigate('/account');
+                      }}
+                    >
+                      My Orders <ChevronDown size={15} />
+                    </a>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      className="mobile-nav-link"
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--status-danger)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                      onClick={async () => {
+                        setMobileNavOpen(false);
+                        await logout();
+                        navigate('/');
+                      }}
+                    >
+                      <span>Logout</span>
+                      <LogIn size={15} style={{ transform: 'rotate(180deg)' }} />
+                    </button>
+                  </li>
+                </>
+              ) : (
+                <li>
+                  <a
+                    href="/login"
+                    className="mobile-nav-link"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setMobileNavOpen(false);
+                      navigate('/login');
+                    }}
+                  >
+                    Login / Register <ChevronDown size={15} />
+                  </a>
+                </li>
+              )}
             </ul>
           </div>
         )}
@@ -542,11 +681,12 @@ export default function App() {
           onNavigateLogin={() => navigate('/login')}
           onSuccess={() => navigate('/account')}
         />
-      ) : currentPath === '/account' ? (
+      ) : currentPath === '/account' || currentPath === '/account/orders/:orderNumber' ? (
         authUser ? (
           <AccountPage
             onNavigateShop={() => navigate('/vegetables')}
             onNavigateHome={() => navigate('/')}
+            activeOrderNumber={currentRoute.orderNumber}
           />
         ) : (
           <LoginPage

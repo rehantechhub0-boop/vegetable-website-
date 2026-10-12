@@ -20,6 +20,7 @@ export interface AuthUser {
 interface AuthState {
   user: AuthUser | null;
   token: string | null;
+  isAuthenticated: boolean;
   loading: boolean;
   setUser: (user: AuthUser | null, token?: string | null) => void;
   logout: () => Promise<void>;
@@ -31,17 +32,18 @@ const TOKEN_KEY = 'muzaffargarh_auth_token';
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null,
+  isAuthenticated: false,
   loading: true,
 
   setUser: (user, token) => {
     if (token) {
       localStorage.setItem(TOKEN_KEY, token);
-      set({ user, token, loading: false });
+      set({ user, token, isAuthenticated: !!user, loading: false });
     } else if (token === null) {
       localStorage.removeItem(TOKEN_KEY);
-      set({ user: null, token: null, loading: false });
+      set({ user: null, token: null, isAuthenticated: false, loading: false });
     } else {
-      set({ user, loading: false });
+      set({ user, isAuthenticated: !!user, loading: false });
     }
   },
 
@@ -52,7 +54,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // ignore
     }
     localStorage.removeItem(TOKEN_KEY);
-    set({ user: null, token: null, loading: false });
+    set({ user: null, token: null, isAuthenticated: false, loading: false });
   },
 
   checkAuth: async () => {
@@ -71,7 +73,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.user) {
-          set({ user: json.user, loading: false });
+          set({ user: json.user, isAuthenticated: true, loading: false });
           return;
         }
       }
@@ -81,6 +83,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     // If failed or expired, clean up token
     localStorage.removeItem(TOKEN_KEY);
-    set({ user: null, token: null, loading: false });
+    set({ user: null, token: null, isAuthenticated: false, loading: false });
   },
 }));

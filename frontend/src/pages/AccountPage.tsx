@@ -95,7 +95,25 @@ export const AccountPage: React.FC<AccountPageProps> = ({
               const match = data.data.find(
                 (o: CustomerOrderSummary) => o.orderNumber.toLowerCase() === activeOrderNumber.toLowerCase()
               );
-              if (match) setSelectedOrder(match);
+              if (match) {
+                setSelectedOrder(match);
+              } else {
+                // Fetch direct order to enforce backend ownership verification
+                try {
+                  const singleRes = await fetch(`/api/v1/orders/${encodeURIComponent(activeOrderNumber)}`, {
+                    headers,
+                    credentials: 'include',
+                  });
+                  const singleData = await singleRes.json();
+                  if (singleRes.ok && singleData.success && singleData.order) {
+                    setSelectedOrder(singleData.order);
+                  } else {
+                    setOrdersError(singleData.error || 'Order not found or you do not have permission to view this order.');
+                  }
+                } catch {
+                  setOrdersError('Failed to load order details.');
+                }
+              }
             }
           } else {
             setOrdersError(data.error || 'Failed to load order history.');
@@ -224,7 +242,10 @@ export const AccountPage: React.FC<AccountPageProps> = ({
                 <button
                   type="button"
                   className="cart-breadcrumb-btn"
-                  onClick={() => setSelectedOrder(null)}
+                  onClick={() => {
+                    setSelectedOrder(null);
+                    window.history.pushState({}, '', '/account');
+                  }}
                 >
                   <ArrowLeft size={16} />
                   Back to All Orders
@@ -331,13 +352,17 @@ export const AccountPage: React.FC<AccountPageProps> = ({
                   <article
                     key={o.id}
                     className="account-order-card"
-                    onClick={() => setSelectedOrder(o)}
+                    onClick={() => {
+                      setSelectedOrder(o);
+                      window.history.pushState({}, '', `/account/orders/${o.orderNumber}`);
+                    }}
                     tabIndex={0}
                     role="button"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
                         setSelectedOrder(o);
+                        window.history.pushState({}, '', `/account/orders/${o.orderNumber}`);
                       }
                     }}
                   >

@@ -71,6 +71,18 @@ export function requireAuth(req: AuthenticatedRequest, res: Response, next: Next
   }
 }
 
+export function requireCustomer(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  requireAuth(req, res, () => {
+    if (req.user?.role !== 'CUSTOMER' && req.user?.role !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. Customer account required.',
+      });
+    }
+    next();
+  });
+}
+
 export function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   requireAuth(req, res, () => {
     if (req.user?.role !== 'ADMIN') {
@@ -82,3 +94,4 @@ export function requireAdmin(req: AuthenticatedRequest, res: Response, next: Nex
     next();
   });
 }
+

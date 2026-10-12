@@ -4406,5 +4406,95 @@ button, input, select, textarea {
   border-top: 1px solid var(--border-subtle);
 }
 
+/* Navbar Account Dropdown Menu */
+.nav-user-dropdown-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.nav-user-trigger-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 9999px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-card);
+  color: var(--text-headline);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.nav-user-trigger-btn:hover,
+.nav-user-trigger-btn.active {
+  border-color: var(--primary-500);
+  background: var(--primary-50);
+  color: var(--primary-900);
+}
+
+.nav-user-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  width: 200px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 0.5rem 0;
+  z-index: 1000;
+  animation: fadeInDown 0.15s ease-out forwards;
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.nav-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.6rem 1rem;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-body);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.nav-dropdown-item:hover {
+  background: var(--surface-hover);
+  color: var(--primary-700);
+}
+
+.nav-dropdown-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 0.35rem 0;
+}
+
+.nav-dropdown-item.danger-item {
+  color: var(--status-danger);
+}
+
+.nav-dropdown-item.danger-item:hover {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+
 
 

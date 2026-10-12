@@ -14,6 +14,8 @@ import {
 } from './services/auth.service.js';
 import {
   requireAuth,
+  requireCustomer,
+  requireAdmin,
   optionalAuth,
   AuthenticatedRequest,
 } from './middlewares/auth.middleware.js';
@@ -225,10 +227,32 @@ app.get('/api/v1/auth/me', requireAuth, async (req: AuthenticatedRequest, res: R
   }
 });
 
-// Google OAuth verification / endpoint
+// Google OAuth status & initiation URL
+app.get('/api/v1/auth/google', (req: Request, res: Response) => {
+  const configuredClientId = process.env.GOOGLE_CLIENT_ID;
+  const callbackUrl = process.env.GOOGLE_CALLBACK_URL || 'http://localhost:5173/login';
+
+  if (!configuredClientId) {
+    return res.status(503).json({
+      success: false,
+      error: 'Google Sign-In is not configured yet on this server. Missing GOOGLE_CLIENT_ID.',
+      setupRequired: true,
+      requiredEnv: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_CALLBACK_URL'],
+    });
+  }
+
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(configuredClientId)}&redirect_uri=${encodeURIComponent(callbackUrl)}&response_type=code&scope=openid%20email%20profile&access_type=offline`;
+
+  return res.json({
+    success: true,
+    authUrl,
+  });
+});
+
+// Google OAuth verification / ID token login endpoint
 app.post('/api/v1/auth/google', async (req: Request, res: Response) => {
   try {
-    const { credential, client_id } = req.body;
+    const { credential } = req.body;
     const configuredClientId = process.env.GOOGLE_CLIENT_ID;
 
     if (!configuredClientId) {
@@ -236,6 +260,7 @@ app.post('/api/v1/auth/google', async (req: Request, res: Response) => {
         success: false,
         error: 'Google Sign-In is not configured yet on this server. Please contact administrator or use Email login.',
         setupRequired: true,
+        requiredEnv: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_CALLBACK_URL'],
       });
     }
 
@@ -285,6 +310,15 @@ app.post('/api/v1/auth/google', async (req: Request, res: Response) => {
     console.error('Google OAuth error:', err);
     return res.status(500).json({ success: false, error: 'Google authentication failed.' });
   }
+});
+
+// Admin Authorization Foundation (Customers must be rejected)
+app.get('/api/v1/admin/health', requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+  return res.json({
+    success: true,
+    message: 'Admin authorization verified.',
+    adminUserId: req.user?.id,
+  });
 });
 
 // Update Profile
