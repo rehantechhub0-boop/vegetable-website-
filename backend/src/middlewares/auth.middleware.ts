@@ -29,7 +29,14 @@ export function setPrismaForMiddleware(p: PrismaClient) {
 }
 
 export function parseTokenFromRequest(req: Request): string | null {
-  // Cookie only — Bearer header support removed; all auth flows use httpOnly cookie.
+  // 1. Check Authorization: Bearer <token> header (standard for cross-origin SPAs & Cloudflare Workers)
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7).trim();
+    if (token) return token;
+  }
+
+  // 2. Check Cookie (for same-origin requests)
   const cookieHeader = req.headers.cookie;
   if (cookieHeader) {
     const cookies = cookieHeader.split(';').map((c) => c.trim());

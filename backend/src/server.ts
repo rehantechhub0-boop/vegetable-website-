@@ -381,13 +381,14 @@ app.post('/api/v1/auth/register', authRateLimiter, async (req: Request, res: Res
     res.cookie('auth_token', result.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     return res.status(201).json({
       success: true,
       user: result.user,
+      token: result.token,
     });
   } catch (err: any) {
     if (err instanceof AuthError) {
@@ -406,13 +407,14 @@ app.post('/api/v1/auth/login', authRateLimiter, async (req: Request, res: Respon
     res.cookie('auth_token', result.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     return res.json({
       success: true,
       user: result.user,
+      token: result.token,
     });
   } catch (err: any) {
     if (err instanceof AuthError) {
@@ -610,7 +612,7 @@ app.post('/api/v1/auth/google', authRateLimiter, async (req: Request, res: Respo
     res.cookie('auth_token', result.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 

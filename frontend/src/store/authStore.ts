@@ -46,6 +46,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch {
       // Best-effort — clear local state regardless
     }
+    try {
+      localStorage.removeItem('auth_token');
+    } catch {}
     set({ user: null, isAuthenticated: false, loading: false });
   },
 
@@ -67,6 +70,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
 
     // Session expired or not authenticated
+    try {
+      localStorage.removeItem('auth_token');
+    } catch {}
     set({ user: null, isAuthenticated: false, loading: false });
   },
 }));
