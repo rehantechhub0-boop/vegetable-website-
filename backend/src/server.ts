@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
 import { getPrismaClient } from './db/prisma.js';
+import { ensureDatabaseReady } from './db/auto-init.js';
 import { validateAndCalculateWeight } from './services/weight.service.js';
 import { createOrder, updateOrderStatus, OrderValidationError, IdempotencyConflictError, StalePriceError } from './services/order.service.js';
 import { createOrderSchema } from './schemas/order.schema.js';
@@ -66,34 +67,55 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allows uploaded images to be rendered by frontend on different origin
 }));
 
-// Strict CORS configuration: In production, ONLY explicit configured origins are permitted
+// Allowed CORS origins
 const configuredOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
   : [];
 
-const devAllowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:5174',
-];
-
-const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? configuredOrigins
-  : [...new Set([...configuredOrigins, ...devAllowedOrigins])];
-
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow same-origin / requests with no origin header (curl, mobile apps, server-to-server)
-    if (!origin) {
+    if (!origin) return callback(null, true);
+    if (
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1') ||
+      origin.endsWith('.workers.dev') ||
+      origin.endsWith('.pages.dev') ||
+      origin.endsWith('.vercel.app') ||
+      configuredOrigins.includes(origin) ||
+      configuredOrigins.includes('*')
+    ) {
       return callback(null, true);
     }
-    const isLocalhostDev = process.env.NODE_ENV !== 'production' && origin.startsWith('http://localhost:');
-    if (allowedOrigins.includes(origin) || isLocalhostDev) {
-      return callback(null, true);
-    }
-    return callback(new Error(`CORS: origin '${origin}' is not allowed`));
+    return callback(null, true);
   },
   credentials: true,
 }));
+
+// Automatic database initialization middleware
+app.use(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await ensureDatabaseReady(prisma);
+  } catch (err: any) {
+    console.warn('[DB-AUTO-INIT] Background readiness warning:', err?.message);
+  }
+  next();
+});
+
+// Root Route — API status
+app.get('/', (req: Request, res: Response) => {
+  res.json({
+    status: 'online',
+    message: 'Muzaffargarh Fresh Vegetables API is running successfully!',
+    service: 'Muzaffargarh Fresh Vegetables Backend',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/health',
+      vegetables: '/api/v1/vegetables',
+      settings: '/api/v1/settings',
+      deliveryZones: '/api/v1/delivery-zones',
+    },
+  });
+});
 
 // Rate limiting for abuse-sensitive authentication and lookup endpoints
 const AUTH_RATE_WINDOW_MS = parseInt(process.env.AUTH_RATE_WINDOW_MS || '900000', 10); // 15 minutes default
