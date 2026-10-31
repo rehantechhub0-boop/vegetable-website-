@@ -13,8 +13,8 @@ export const GoogleSignInModal: React.FC<GoogleSignInModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const [email, setEmail] = useState('rehan.techhub0@gmail.com');
-  const [name, setName] = useState('Rehan Qadri');
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,11 +108,6 @@ export const GoogleSignInModal: React.FC<GoogleSignInModalProps> = ({
         <p className="google-modal-subtitle">
           to continue to <strong>Fresh Vegetables Muzaffargarh</strong>
         </p>
-
-        {/* Origin Tip for Developer */}
-        <div className="google-origin-tip-box">
-          <strong>Google Origin Setup:</strong> Agar Google popup me <em>no registered origin</em> aaye, Google Cloud Console me Client ID ke andar <code>Authorized JavaScript origins</code> me <code>http://localhost:5173</code> add karke Save karein. Abhi login ke liye aap foran neeche diye button se sign in kar sakte hain!
-        </div>
 
         {error && (
           <div className="google-modal-alert">

@@ -701,12 +701,19 @@ button, input, select, textarea {
 }
 
 /* 2. Main Navbar */
-.site-header {
-  background-color: #ffffff;
-  border-bottom: 1px solid var(--border-subtle);
+.site-sticky-header-group {
   position: sticky;
   top: 0;
   z-index: 100;
+  width: 100%;
+  background: #ffffff;
+}
+
+.site-header {
+  background-color: #ffffff;
+  border-bottom: 1px solid var(--border-subtle);
+  position: relative;
+  z-index: 99;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
@@ -756,20 +763,40 @@ button, input, select, textarea {
 .nav-menu {
   display: flex;
   align-items: center;
-  gap: 1.75rem;
+  gap: 0.35rem;
   list-style: none;
+  background: #f1f5f9;
+  padding: 4px 6px;
+  border-radius: 9999px;
+  border: 1px solid #e2e8f0;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
 .nav-link {
-  font-size: 0.92rem;
+  font-size: 0.86rem;
   font-weight: 600;
-  color: var(--text-body);
-  transition: color var(--transition-fast);
+  color: #475569;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   cursor: pointer;
 }
 
-.nav-link:hover, .nav-link.active {
-  color: var(--primary-700);
+.nav-link:hover {
+  color: var(--primary-800);
+  background-color: rgba(255, 255, 255, 0.7);
+}
+
+.nav-link.active {
+  color: #064e3b;
+  background-color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .nav-actions {
@@ -5003,6 +5030,170 @@ button, input, select, textarea {
   margin-top: 1rem;
 }
 
+/* ── WORDPRESS-STYLE SMOOTH ENTRANCE ANIMATIONS (Flash / Fade / Stagger) ── */
+@keyframes wpFlashFade {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+    filter: blur(4px);
+  }
+  60% {
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+@keyframes wpSlideDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.vip-vegetable-card {
+  animation: wpFlashFade 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Stagger entrance for catalog cards */
+.vip-vegetables-grid > article:nth-child(1) { animation-delay: 0.04s; }
+.vip-vegetables-grid > article:nth-child(2) { animation-delay: 0.08s; }
+.vip-vegetables-grid > article:nth-child(3) { animation-delay: 0.12s; }
+.vip-vegetables-grid > article:nth-child(4) { animation-delay: 0.16s; }
+.vip-vegetables-grid > article:nth-child(5) { animation-delay: 0.20s; }
+.vip-vegetables-grid > article:nth-child(6) { animation-delay: 0.24s; }
+.vip-vegetables-grid > article:nth-child(7) { animation-delay: 0.28s; }
+.vip-vegetables-grid > article:nth-child(8) { animation-delay: 0.32s; }
+.vip-vegetables-grid > article:nth-child(9) { animation-delay: 0.36s; }
+.vip-vegetables-grid > article:nth-child(10) { animation-delay: 0.40s; }
+.vip-vegetables-grid > article:nth-child(n+11) { animation-delay: 0.44s; }
+
+.hero-vip-left {
+  animation: wpFlashFade 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hero-vip-right {
+  animation: wpFlashFade 0.85s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.15s;
+}
+
+.hero-frames-section {
+  animation: wpFlashFade 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.25s;
+}
+
+/* ── HOMEPAGE ALL CATALOG CTA BANNER (ELEGANT MINT & EMERALD DESIGN) ── */
+.homepage-all-catalog-cta {
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #d1fae5 100%);
+  border: 2px solid #a7f3d0;
+  border-radius: 24px;
+  padding: 2.25rem 2.5rem;
+  margin-top: 3.5rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1.75rem;
+  box-shadow: 0 12px 32px -6px rgba(5, 150, 105, 0.12);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.homepage-all-catalog-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 36px -4px rgba(5, 150, 105, 0.18);
+}
+
+.catalog-cta-info {
+  flex: 1;
+  min-width: 280px;
+}
+
+.catalog-cta-badge {
+  display: inline-block;
+  background-color: #059669;
+  color: #ffffff;
+  padding: 4px 14px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.catalog-cta-title {
+  font-size: clamp(1.35rem, 2.5vw, 1.75rem);
+  font-weight: 800;
+  color: #064e3b;
+  margin: 0.35rem 0 0.5rem 0;
+  line-height: 1.25;
+}
+
+.catalog-cta-desc {
+  font-size: 0.925rem;
+  color: #334155;
+  margin: 0;
+  line-height: 1.55;
+  max-width: 600px;
+}
+
+.catalog-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 26px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border-radius: 12px;
+  background-color: #059669;
+  color: #ffffff;
+  box-shadow: 0 6px 18px rgba(5, 150, 105, 0.3);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.catalog-cta-btn:hover {
+  background-color: #047857;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(5, 150, 105, 0.45);
+}
+
+@media (max-width: 640px) {
+  .homepage-all-catalog-cta {
+    padding: 1.75rem 1.25rem;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .catalog-cta-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ── UNIVERSAL SCROLL ENTRANCE ANIMATIONS (WORDPRESS / FRAMER REVEAL) ── */
+.scroll-reveal-item {
+  opacity: 0;
+  transform: translateY(32px) scale(0.99);
+  transition: opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1), transform 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.scroll-reveal-item.is-revealed {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+
 /* ==========================================================================
    ADMIN PANEL STYLES — MUZAFFARGARH FRESH VEGETABLES
    ========================================================================== */
@@ -7085,7 +7276,8 @@ button, input, select, textarea {
 
 .hero-frame-card {
   display: grid;
-  grid-template-columns: 0.95fr 1.05fr;
+  grid-template-columns: 1fr 1fr;
+  max-height: 460px;
   background: #ffffff;
   border: 1px solid rgba(16, 185, 129, 0.2);
   border-radius: 20px;
@@ -7096,7 +7288,8 @@ button, input, select, textarea {
 
 .frame-card-visual {
   position: relative;
-  min-height: 280px;
+  height: 100%;
+  max-height: 460px;
   overflow: hidden;
   background: #064e3b;
 }
@@ -7104,7 +7297,9 @@ button, input, select, textarea {
 .frame-card-img {
   width: 100%;
   height: 100%;
+  max-height: 460px;
   object-fit: cover;
+  object-position: center;
   display: block;
   transition: transform 0.6s ease;
 }
@@ -7729,17 +7924,23 @@ button, input, select, textarea {
 .vip-btn-add-cart {
   flex: 1;
   width: 100%;
+  height: 42px;
+  min-height: 42px;
+  max-height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  padding: 0.75rem 1rem;
+  padding: 0 1rem;
   background: linear-gradient(135deg, var(--primary-700) 0%, var(--primary-800) 100%);
   color: #ffffff;
   border: none;
   border-radius: var(--radius-md);
-  font-size: 0.88rem;
+  font-size: 0.86rem;
   font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: 0 2px 8px rgba(6, 78, 59, 0.2);
@@ -7953,15 +8154,15 @@ button, input, select, textarea {
 
 /* ── 9. LIVE NEWS MARQUEE TICKER (TOP BAR) ── */
 .live-ticker-bar {
-  background: linear-gradient(90deg, #022c22 0%, #064e3b 50%, #022c22 100%);
-  border-bottom: 1px solid rgba(52, 211, 153, 0.25);
+  background: linear-gradient(90deg, #065f46 0%, #047857 50%, #065f46 100%);
+  border-bottom: 1px solid rgba(52, 211, 153, 0.35);
   height: 38px;
   display: flex;
   align-items: center;
   position: relative;
   z-index: 50;
   overflow: hidden;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
 .live-ticker-badge-wrap {
@@ -11439,5 +11640,169 @@ button, input, select, textarea {
   justify-content: center;
   margin-top: 1rem;
 }
+
+/* ── WORDPRESS-STYLE SMOOTH ENTRANCE ANIMATIONS (Flash / Fade / Stagger) ── */
+@keyframes wpFlashFade {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+    filter: blur(4px);
+  }
+  60% {
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+@keyframes wpSlideDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.vip-vegetable-card {
+  animation: wpFlashFade 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Stagger entrance for catalog cards */
+.vip-vegetables-grid > article:nth-child(1) { animation-delay: 0.04s; }
+.vip-vegetables-grid > article:nth-child(2) { animation-delay: 0.08s; }
+.vip-vegetables-grid > article:nth-child(3) { animation-delay: 0.12s; }
+.vip-vegetables-grid > article:nth-child(4) { animation-delay: 0.16s; }
+.vip-vegetables-grid > article:nth-child(5) { animation-delay: 0.20s; }
+.vip-vegetables-grid > article:nth-child(6) { animation-delay: 0.24s; }
+.vip-vegetables-grid > article:nth-child(7) { animation-delay: 0.28s; }
+.vip-vegetables-grid > article:nth-child(8) { animation-delay: 0.32s; }
+.vip-vegetables-grid > article:nth-child(9) { animation-delay: 0.36s; }
+.vip-vegetables-grid > article:nth-child(10) { animation-delay: 0.40s; }
+.vip-vegetables-grid > article:nth-child(n+11) { animation-delay: 0.44s; }
+
+.hero-vip-left {
+  animation: wpFlashFade 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hero-vip-right {
+  animation: wpFlashFade 0.85s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.15s;
+}
+
+.hero-frames-section {
+  animation: wpFlashFade 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 0.25s;
+}
+
+/* ── HOMEPAGE ALL CATALOG CTA BANNER (ELEGANT MINT & EMERALD DESIGN) ── */
+.homepage-all-catalog-cta {
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #d1fae5 100%);
+  border: 2px solid #a7f3d0;
+  border-radius: 24px;
+  padding: 2.25rem 2.5rem;
+  margin-top: 3.5rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1.75rem;
+  box-shadow: 0 12px 32px -6px rgba(5, 150, 105, 0.12);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.homepage-all-catalog-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 36px -4px rgba(5, 150, 105, 0.18);
+}
+
+.catalog-cta-info {
+  flex: 1;
+  min-width: 280px;
+}
+
+.catalog-cta-badge {
+  display: inline-block;
+  background-color: #059669;
+  color: #ffffff;
+  padding: 4px 14px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.catalog-cta-title {
+  font-size: clamp(1.35rem, 2.5vw, 1.75rem);
+  font-weight: 800;
+  color: #064e3b;
+  margin: 0.35rem 0 0.5rem 0;
+  line-height: 1.25;
+}
+
+.catalog-cta-desc {
+  font-size: 0.925rem;
+  color: #334155;
+  margin: 0;
+  line-height: 1.55;
+  max-width: 600px;
+}
+
+.catalog-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 26px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border-radius: 12px;
+  background-color: #059669;
+  color: #ffffff;
+  box-shadow: 0 6px 18px rgba(5, 150, 105, 0.3);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.catalog-cta-btn:hover {
+  background-color: #047857;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(5, 150, 105, 0.45);
+}
+
+@media (max-width: 640px) {
+  .homepage-all-catalog-cta {
+    padding: 1.75rem 1.25rem;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .catalog-cta-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ── UNIVERSAL SCROLL ENTRANCE ANIMATIONS (WORDPRESS / FRAMER REVEAL) ── */
+.scroll-reveal-item {
+  opacity: 0;
+  transform: translateY(32px) scale(0.99);
+  transition: opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1), transform 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.scroll-reveal-item.is-revealed {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
 
 

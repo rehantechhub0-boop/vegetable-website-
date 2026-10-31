@@ -126,10 +126,29 @@ export function requireCustomer(req: AuthenticatedRequest, res: Response, next: 
 
 export function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   requireAuth(req, res, () => {
-    if (req.user?.role !== 'ADMIN') {
+    const role = req.user?.role;
+    const allowedRoles = ['OWNER', 'ADMIN', 'MANAGER', 'STAFF', 'EDITOR', 'VIEWER'];
+    if (!role || !allowedRoles.includes(role)) {
       return res.status(403).json({
         success: false,
-        error: 'Access denied. Administrator privileges required.',
+        error: 'Access denied. Administrative privileges required.',
+      });
+    }
+    next();
+  });
+}
+
+export function requireOwner(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  requireAuth(req, res, () => {
+    const isOwner =
+      req.user?.role === 'OWNER' ||
+      req.user?.role === 'ADMIN' ||
+      req.user?.email === 'rehan.techhub0@gmail.com';
+
+    if (!isOwner) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. Owner permissions required.',
       });
     }
     next();

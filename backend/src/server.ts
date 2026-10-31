@@ -195,9 +195,9 @@ app.get('/api/v1/settings', async (req: Request, res: Response, next: NextFuncti
       data: {
         brandName: configMap['brand_name'] || 'Fresh Vegetables Muzaffargarh',
         brandTagline: configMap['brand_tagline'] || 'Farm-fresh vegetables delivered to your doorstep.',
-        contactPhone: configMap['contact_phone'] || '0300-1234567',
+        contactPhone: configMap['contact_phone'] || '03427883728',
         currency: configMap['currency_symbol'] || 'Rs.',
-        whatsappNumber: configMap['whatsapp_number'] || '923001234567',
+        whatsappNumber: configMap['whatsapp_number'] || '923427883728',
         whatsappEnabled: configMap['whatsapp_enabled'] === 'true',
         defaultDeliveryFee: parseFloat(configMap['default_delivery_fee'] || '100'),
         minOrderAmount: parseFloat(configMap['min_order_amount'] || '300'),
@@ -237,6 +237,78 @@ app.post('/api/v1/weight/calculate', (req: Request, res: Response) => {
   }
 });
 
+// Promo / Discount Code Validation Endpoint
+app.post('/api/v1/promos/validate', async (req: Request, res: Response) => {
+  try {
+    const { code, subtotal, deliveryFee = 100 } = req.body;
+    if (!code || typeof code !== 'string') {
+      return res.status(400).json({ success: false, error: 'Promo code is required.' });
+    }
+
+    const cleanCode = code.trim().toUpperCase();
+    const cleanSubtotal = parseFloat(subtotal) || 0;
+    const cleanFee = parseFloat(deliveryFee) || 0;
+
+    let discount = 0;
+    let description = '';
+
+    if (cleanCode === 'TAAZA10') {
+      if (cleanSubtotal < 300) {
+        return res.status(400).json({ success: false, error: 'TAAZA10 requires minimum order of Rs. 300.' });
+      }
+      discount = Math.round(cleanSubtotal * 0.10);
+      description = '10% Flat Discount on Fresh Vegetables';
+    } else if (cleanCode === 'SABZI20') {
+      if (cleanSubtotal < 500) {
+        return res.status(400).json({ success: false, error: 'SABZI20 requires minimum order of Rs. 500.' });
+      }
+      discount = Math.round(cleanSubtotal * 0.20);
+      description = '20% Special Sabzi Discount';
+    } else if (cleanCode === 'FREESHIP') {
+      discount = cleanFee;
+      description = '100% Free Doorstep Express Delivery';
+    } else if (cleanCode === 'FIRST50') {
+      if (cleanSubtotal < 250) {
+        return res.status(400).json({ success: false, error: 'FIRST50 requires minimum order of Rs. 250.' });
+      }
+      discount = Math.min(50, cleanSubtotal);
+      description = 'Rs. 50 Flat Welcome Discount';
+    } else if (cleanCode === 'MUZAFFAR15') {
+      if (cleanSubtotal < 350) {
+        return res.status(400).json({ success: false, error: 'MUZAFFAR15 requires minimum order of Rs. 350.' });
+      }
+      discount = Math.round(cleanSubtotal * 0.15);
+      description = '15% Muzaffargarh City Celebration Discount';
+    } else {
+      // Check if custom promo exists in Setting table
+      const settingPromo = await prisma.setting.findUnique({
+        where: { key: `promo_${cleanCode.toLowerCase()}` },
+      });
+      if (settingPromo && settingPromo.value) {
+        const val = parseFloat(settingPromo.value);
+        if (!isNaN(val) && val > 0) {
+          discount = val <= 100 ? Math.round(cleanSubtotal * (val / 100)) : Math.min(val, cleanSubtotal);
+          description = `Special Store Offer (${cleanCode})`;
+        }
+      }
+    }
+
+    if (discount <= 0 && !description) {
+      return res.status(404).json({ success: false, error: 'Invalid or expired promo code.' });
+    }
+
+    return res.json({
+      success: true,
+      code: cleanCode,
+      discount,
+      description,
+      newTotal: Math.max(0, cleanSubtotal + cleanFee - discount),
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || 'Promo validation failed.' });
+  }
+});
+
 // Delivery Zones (Admin Controlled)
 app.get('/api/v1/delivery-zones', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -266,7 +338,7 @@ app.get('/api/v1/delivery-zones', async (req: Request, res: Response, next: Next
 // Vegetables Catalog API (Vegetables Only)
 app.get('/api/v1/vegetables', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=30, stale-while-revalidate=60');
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600');
     if (cachedVegetables && (Date.now() - cachedVegetables.timestamp < CACHE_TTL_VEGETABLES)) {
       res.setHeader('X-Cache-Status', 'HIT');
       return res.json(cachedVegetables.data);
@@ -835,59 +907,85 @@ app.post('/api/v1/orders/guest-lookup', authRateLimiter, async (req: Request, re
     }
 
     const { orderNumber, phone } = req.body;
-    if (!orderNumber || !phone) {
+    if (!orderNumber && !phone) {
       return res.status(400).json({
         success: false,
-        error: 'Both order number and phone number are required for order tracking.',
+        error: 'Please provide either your Order Number or your Phone Number.',
       });
     }
 
-    const rawNumber = String(orderNumber).replace(/^ORD-/i, '').trim();
-    const numId = parseInt(rawNumber, 10);
-    if (isNaN(numId) || numId <= 0) {
-      return res.status(400).json({ success: false, error: 'Invalid order number format.' });
+    const rawInput = String(orderNumber || '').trim();
+    const cleanInputPhone = String(phone || '').replace(/\D/g, '');
+
+    let order: any = null;
+
+    // 1. Numerical ID lookup (e.g. ORD-1001 or 1001)
+    const numId = parseInt(rawInput.replace(/^ORD-/i, '').trim(), 10);
+    if (!isNaN(numId) && numId > 0 && numId < 1000000) {
+      order = await prisma.order.findUnique({
+        where: { id: numId },
+        include: {
+          deliveryZone: true,
+          items: true,
+          statusHistory: { orderBy: { createdAt: 'asc' } },
+        },
+      });
     }
 
-    // Clean phone input
-    const cleanInputPhone = String(phone).replace(/\D/g, '');
-    if (cleanInputPhone.length < 7) {
-      return res.status(400).json({ success: false, error: 'Please provide a valid contact phone number.' });
+    // 2. UUID lookup
+    if (!order && rawInput.length >= 20) {
+      order = await prisma.order.findUnique({
+        where: { uuid: rawInput },
+        include: {
+          deliveryZone: true,
+          items: true,
+          statusHistory: { orderBy: { createdAt: 'asc' } },
+        },
+      });
     }
 
-    const order = await prisma.order.findUnique({
-      where: { id: numId },
-      include: {
-        deliveryZone: true,
-        items: true,
-        statusHistory: { orderBy: { createdAt: 'asc' } },
-      },
-    }) as any;
+    // 3. Lookup by phone if order is still null and phone has enough digits
+    if (!order && cleanInputPhone.length >= 7) {
+      const match = await prisma.order.findMany({
+        where: {
+          customerPhone: {
+            contains: cleanInputPhone.slice(-7),
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        include: {
+          deliveryZone: true,
+          items: true,
+          statusHistory: { orderBy: { createdAt: 'asc' } },
+        },
+      });
+      if (match.length > 0) {
+        order = match[0];
+      }
+    }
 
     if (!order) {
       return res.status(404).json({
         success: false,
-        error: 'No order found matching the provided order number and phone number.',
+        error: 'No order found matching the provided order number or phone number.',
       });
     }
 
-    // Verify phone matches the order's customer phone
-    const cleanOrderPhone = String(order.customerPhone).replace(/\D/g, '');
-    const isPhoneMatch =
-      cleanOrderPhone === cleanInputPhone ||
-      cleanOrderPhone.endsWith(cleanInputPhone) ||
-      cleanInputPhone.endsWith(cleanOrderPhone);
+    // If both order and phone were provided, verify phone matching
+    if (cleanInputPhone.length >= 7) {
+      const cleanOrderPhone = String(order.customerPhone).replace(/\D/g, '');
+      const isPhoneMatch =
+        cleanOrderPhone === cleanInputPhone ||
+        cleanOrderPhone.endsWith(cleanInputPhone) ||
+        cleanInputPhone.endsWith(cleanOrderPhone);
 
-    if (!isPhoneMatch) {
-      const curr = guestLookupFailures.get(clientIp) || { count: 0, lockedUntil: 0 };
-      const nextCount = curr.count + 1;
-      guestLookupFailures.set(clientIp, {
-        count: nextCount,
-        lockedUntil: nextCount >= 10 ? now + 15 * 60 * 1000 : 0,
-      });
-      return res.status(404).json({
-        success: false,
-        error: 'No order found matching the provided order number and phone number.',
-      });
+      if (!isPhoneMatch && !orderNumber) {
+        return res.status(404).json({
+          success: false,
+          error: 'No order found matching this phone number.',
+        });
+      }
     }
 
     // Success -> clear tracker

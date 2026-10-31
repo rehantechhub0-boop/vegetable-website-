@@ -8,8 +8,8 @@ interface AboutAndServiceSectionProps {
 }
 
 export const AboutAndServiceSection: React.FC<AboutAndServiceSectionProps> = ({
-  contactPhone = '0300-1234567',
-  whatsappNumber = '03001234567',
+  contactPhone = '0342-7883728',
+  whatsappNumber = '923427883728',
   onNavigateVegetables,
 }) => {
   const servicePillars = [

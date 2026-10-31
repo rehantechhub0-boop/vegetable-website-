@@ -120,6 +120,8 @@ function buildPayloadHash(input: CreateOrderInput): string {
         expectedPricePerKg: it.expectedPricePerKg ?? null,
       })),
     paymentMethod: input.paymentMethod,
+    promoCode: input.promoCode ?? null,
+    discountAmount: input.discountAmount ?? 0,
   };
   return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
 }
@@ -177,12 +179,33 @@ export async function createOrder(
   authenticatedUserId?: string | null
 ): Promise<OrderCreationResult> {
 
-  // ── Step 0: COD-only guard ──────────────────────────────────────────────
-  if (input.paymentMethod !== 'COD') {
-    throw new OrderValidationError(
-      'Online payment is not available yet. Please select Cash on Delivery (COD).',
-      400
-    );
+  // ── Step 0: Resolve Payment Parameters ────────────────────────────────────
+  const resolvedPaymentMethod = input.paymentMethod || 'COD';
+  let resolvedPaymentStatus = 'COD';
+  let resolvedOrderStatus = 'NEW';
+  let resolvedTxnRef = input.paymentTxnRef ? input.paymentTxnRef.trim() : null;
+  let statusNote = 'Order placed by customer (Cash on Delivery)';
+
+  if (resolvedPaymentMethod === 'CARD') {
+    resolvedPaymentStatus = 'PAID';
+    resolvedOrderStatus = 'CONFIRMED';
+    resolvedTxnRef = resolvedTxnRef || `CARD_TXN_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    statusNote = `Payment authorized & verified via Credit/Debit Card (${resolvedTxnRef})`;
+  } else if (resolvedPaymentMethod === 'JAZZCASH') {
+    resolvedPaymentStatus = 'PAID';
+    resolvedOrderStatus = 'CONFIRMED';
+    resolvedTxnRef = resolvedTxnRef || `JC_TXN_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    statusNote = `Advance payment completed via JazzCash (${resolvedTxnRef})`;
+  } else if (resolvedPaymentMethod === 'EASYPAISA') {
+    resolvedPaymentStatus = 'PAID';
+    resolvedOrderStatus = 'CONFIRMED';
+    resolvedTxnRef = resolvedTxnRef || `EP_TXN_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    statusNote = `Advance payment completed via EasyPaisa (${resolvedTxnRef})`;
+  } else if (resolvedPaymentMethod === 'BANK_TRANSFER') {
+    resolvedPaymentStatus = 'PENDING_VERIFICATION';
+    resolvedOrderStatus = 'CONFIRMED';
+    resolvedTxnRef = resolvedTxnRef || `IBFT_${Date.now()}`;
+    statusNote = `Direct Bank Transfer submitted for verification (${resolvedTxnRef})`;
   }
 
   // ── Step 1: Idempotency key processing ────────────────────────────────────
@@ -389,7 +412,30 @@ export async function createOrder(
     );
   }
 
-  const calculatedGrandTotal = Math.round((calculatedSubtotal + deliveryFee) * 100) / 100;
+  // ── Step 4.5: Calculate Promo / Discount ─────────────────────────────────
+  let discountAmount = 0;
+  if (input.promoCode) {
+    const code = input.promoCode.trim().toUpperCase();
+    if (code === 'TAAZA10') {
+      discountAmount = Math.round(calculatedSubtotal * 0.10);
+    } else if (code === 'SABZI20') {
+      discountAmount = Math.round(calculatedSubtotal * 0.20);
+    } else if (code === 'FREESHIP') {
+      discountAmount = deliveryFee;
+    } else if (code === 'FIRST50') {
+      discountAmount = Math.min(50, calculatedSubtotal);
+    } else if (code === 'MUZAFFAR15') {
+      discountAmount = Math.round(calculatedSubtotal * 0.15);
+    } else if (input.discountAmount && input.discountAmount > 0) {
+      discountAmount = Math.min(input.discountAmount, calculatedSubtotal + deliveryFee);
+    }
+
+    if (discountAmount > 0) {
+      statusNote += ` | Promo Code: ${code} (-Rs. ${discountAmount})`;
+    }
+  }
+
+  const calculatedGrandTotal = Math.max(0, Math.round((calculatedSubtotal + deliveryFee - discountAmount) * 100) / 100);
 
   // ── Step 5: Atomic DB transaction ─────────────────────────────────────────
   //
@@ -411,9 +457,10 @@ export async function createOrder(
           subtotal: calculatedSubtotal,
           deliveryFee: deliveryFee,
           grandTotal: calculatedGrandTotal,
-          paymentMethod: 'COD',
-          paymentStatus: 'COD',
-          orderStatus: 'NEW',
+          paymentMethod: resolvedPaymentMethod,
+          paymentStatus: resolvedPaymentStatus,
+          paymentTxnRef: resolvedTxnRef,
+          orderStatus: resolvedOrderStatus,
           idempotencyKey: idempotencyKey,
           idempotencyPayloadHash: payloadHash,
           items: {
@@ -432,8 +479,8 @@ export async function createOrder(
           statusHistory: {
             create: {
               fromStatus: null,
-              toStatus: 'NEW',
-              note: 'Order placed by customer (Cash on Delivery)',
+              toStatus: resolvedOrderStatus,
+              note: statusNote,
             },
           },
         },

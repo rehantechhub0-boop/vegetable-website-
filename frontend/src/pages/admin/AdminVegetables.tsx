@@ -54,8 +54,61 @@ export const AdminVegetables: React.FC = () => {
 
   // Image Upload State
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [formImageUrl, setFormImageUrl] = useState('');
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
+
+  // Bulk Selection State
+  const [selectedVegIds, setSelectedVegIds] = useState<string[]>([]);
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  const toggleSelectVeg = (id: string) => {
+    setSelectedVegIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAllVeg = () => {
+    if (vegetables.length > 0 && selectedVegIds.length === vegetables.length) {
+      setSelectedVegIds([]);
+    } else {
+      setSelectedVegIds(vegetables.map((v) => v.id));
+    }
+  };
+
+  const handleBulkVegetableAction = async (action: 'set-availability' | 'delete', isAvailable?: boolean) => {
+    if (selectedVegIds.length === 0) return;
+    if (action === 'delete' && !window.confirm(`Are you sure you want to delete ${selectedVegIds.length} vegetables from catalog?`)) {
+      return;
+    }
+
+    setBulkLoading(true);
+    try {
+      const res = await fetch('/api/v1/admin/vegetables/bulk-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          action,
+          ids: selectedVegIds,
+          isAvailable,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Bulk vegetable operation failed.');
+      }
+      setNotification(data.message || 'Vegetables updated successfully!');
+      setTimeout(() => setNotification(null), 4000);
+      setSelectedVegIds([]);
+      fetchVegetables();
+    } catch (err: any) {
+      alert(`Bulk action error: ${err.message}`);
+    } finally {
+      setBulkLoading(false);
+    }
+  };
 
   const fetchVegetables = async () => {
     setLoading(true);
@@ -104,6 +157,8 @@ export const AdminVegetables: React.FC = () => {
     setFormError(null);
     setImageError(null);
     setSelectedImageFile(null);
+    setFormImageUrl('');
+    setImagePreviewUrl(null);
     setIsModalOpen(true);
   };
 
@@ -119,6 +174,8 @@ export const AdminVegetables: React.FC = () => {
     setFormError(null);
     setImageError(null);
     setSelectedImageFile(null);
+    setFormImageUrl('');
+    setImagePreviewUrl(null);
     setIsModalOpen(true);
   };
 
@@ -174,6 +231,24 @@ export const AdminVegetables: React.FC = () => {
       setTimeout(() => setNotification(null), 4000);
 
       if (modalMode === 'create') {
+        // If an image was selected or entered during creation, immediately upload it
+        if (selectedImageFile) {
+          const formData = new FormData();
+          formData.append('image', selectedImageFile);
+          formData.append('isPrimary', 'true');
+          await fetch(`/api/v1/admin/vegetables/${json.vegetable.id}/images`, {
+            method: 'POST',
+            credentials: 'include',
+            body: formData,
+          });
+        } else if (formImageUrl.trim()) {
+          await fetch(`/api/v1/admin/vegetables/${json.vegetable.id}/images`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ imageUrl: formImageUrl.trim(), isPrimary: true }),
+          });
+        }
         setIsModalOpen(false);
         fetchVegetables();
       } else {
@@ -393,6 +468,15 @@ export const AdminVegetables: React.FC = () => {
             <table className="admin-data-table">
               <thead>
                 <tr>
+                  <th style={{ width: 40, textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={vegetables.length > 0 && selectedVegIds.length === vegetables.length}
+                      onChange={toggleSelectAllVeg}
+                      style={{ cursor: 'pointer', width: 16, height: 16 }}
+                      title="Select all vegetables"
+                    />
+                  </th>
                   <th style={{ width: 60 }}>Image</th>
                   <th>Name & Slug</th>
                   <th>Price / Kg</th>
@@ -405,8 +489,17 @@ export const AdminVegetables: React.FC = () => {
               <tbody>
                 {vegetables.map((veg) => {
                   const primaryImg = veg.images.find((i) => i.isPrimary) || veg.images[0];
+                  const isChecked = selectedVegIds.includes(veg.id);
                   return (
-                    <tr key={veg.id}>
+                    <tr key={veg.id} style={{ backgroundColor: isChecked ? '#f0fdf4' : undefined }}>
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleSelectVeg(veg.id)}
+                          style={{ cursor: 'pointer', width: 16, height: 16 }}
+                        />
+                      </td>
                       <td>
                         <div className="veg-thumbnail-box">
                           {primaryImg ? (
@@ -465,22 +558,24 @@ export const AdminVegetables: React.FC = () => {
                         </span>
                       </td>
                       <td style={{ textAlign: 'right' }}>
-                        <div className="table-actions-group">
+                        <div className="table-actions-group" style={{ display: 'inline-flex', gap: '6px' }}>
                           <button
                             type="button"
                             onClick={() => openEditModal(veg)}
-                            className="admin-icon-btn"
-                            title="Edit vegetable & images"
+                            className="admin-btn admin-btn--secondary btn--sm"
+                            title="Edit vegetable details, price & photos"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px', fontSize: '0.78rem' }}
                           >
-                            <Edit2 size={15} />
+                            <Edit2 size={13} />
+                            <span>Edit</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => handleDeleteVegetable(veg)}
                             className="admin-icon-btn admin-icon-btn--danger"
-                            title="Delete or deactivate"
+                            title="Delete vegetable"
                           >
-                            <Trash2 size={15} />
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       </td>
@@ -489,6 +584,68 @@ export const AdminVegetables: React.FC = () => {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Sticky Vegetable Bulk Action Bar */}
+      {selectedVegIds.length > 0 && (
+        <div
+          style={{
+            position: 'sticky',
+            bottom: '1rem',
+            zIndex: 100,
+            backgroundColor: '#0f172a',
+            color: '#ffffff',
+            padding: '12px 20px',
+            borderRadius: '12px',
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px',
+            marginTop: '1rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>
+              🥬 {selectedVegIds.length} vegetables selected
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedVegIds([])}
+              style={{ backgroundColor: 'transparent', color: '#94a3b8', border: '1px solid #475569', borderRadius: '6px', padding: '4px 8px', fontSize: '0.75rem', cursor: 'pointer' }}
+            >
+              Clear
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => handleBulkVegetableAction('set-availability', true)}
+              disabled={bulkLoading}
+              style={{ backgroundColor: '#059669', color: '#fff', border: 'none', padding: '7px 14px', borderRadius: '7px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
+            >
+              ✅ Mark In-Stock (Available)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleBulkVegetableAction('set-availability', false)}
+              disabled={bulkLoading}
+              style={{ backgroundColor: '#d97706', color: '#fff', border: 'none', padding: '7px 14px', borderRadius: '7px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
+            >
+              ⏸️ Mark Out-of-Stock (Inactive)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleBulkVegetableAction('delete')}
+              disabled={bulkLoading}
+              style={{ backgroundColor: '#dc2626', color: '#fff', border: 'none', padding: '7px 14px', borderRadius: '7px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
+            >
+              ❌ Delete Selected
+            </button>
           </div>
         </div>
       )}
@@ -625,6 +782,194 @@ export const AdminVegetables: React.FC = () => {
                 </div>
               </div>
 
+              {/* Product Image & Gallery Management */}
+              <div
+                style={{
+                  marginTop: '1.25rem',
+                  padding: '1.25rem',
+                  borderRadius: '12px',
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: '#0f172a', fontSize: '0.92rem' }}>
+                    <ImageIcon size={18} color="#059669" />
+                    <span>Product Image &amp; Gallery (سبزی کی تصویر)</span>
+                  </div>
+                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                    JPG, PNG, WebP supported
+                  </span>
+                </div>
+
+                {imageError && (
+                  <div className="admin-form-alert alert--danger" style={{ marginBottom: '10px' }}>
+                    <AlertCircle size={15} />
+                    <span>{imageError}</span>
+                  </div>
+                )}
+
+                {/* Upload or URL input */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <label
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        backgroundColor: '#059669',
+                        color: '#ffffff',
+                        fontSize: '0.82rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 6px rgba(5, 150, 105, 0.2)',
+                      }}
+                    >
+                      <Upload size={15} />
+                      <span>{selectedImageFile ? 'Change File' : 'Browse Photo from Computer'}</span>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            setSelectedImageFile(file);
+                            setImagePreviewUrl(URL.createObjectURL(file));
+                          }
+                        }}
+                      />
+                    </label>
+
+                    {selectedImageFile && (
+                      <span style={{ fontSize: '0.8rem', color: '#065f46', fontWeight: 600 }}>
+                        ✓ {selectedImageFile.name} ({(selectedImageFile.size / 1024).toFixed(1)} KB)
+                      </span>
+                    )}
+
+                    {modalMode === 'edit' && editingVeg && selectedImageFile && (
+                      <button
+                        type="button"
+                        onClick={handleUploadImage}
+                        disabled={uploadingImage}
+                        className="admin-btn admin-btn--primary btn--sm"
+                        style={{ marginLeft: 'auto' }}
+                      >
+                        <Upload size={13} />
+                        <span>{uploadingImage ? 'Uploading...' : 'Upload to Gallery'}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Or Image URL */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>OR Web URL:</span>
+                    <input
+                      type="url"
+                      placeholder="https://images.unsplash.com/photo-..."
+                      value={formImageUrl}
+                      onChange={(e) => {
+                        setFormImageUrl(e.target.value);
+                        if (e.target.value.startsWith('http')) {
+                          setImagePreviewUrl(e.target.value);
+                        }
+                      }}
+                      style={{ flex: 1, padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.8rem', outline: 'none' }}
+                    />
+                  </div>
+
+                  {/* Selected image preview thumbnail */}
+                  {imagePreviewUrl && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px', borderRadius: '8px', backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0' }}>
+                      <img
+                        src={imagePreviewUrl}
+                        alt="Preview"
+                        style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #059669' }}
+                      />
+                      <div>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#065f46', display: 'block' }}>
+                          Ready to attach to this vegetable
+                        </span>
+                        <span style={{ fontSize: '0.72rem', color: '#047857' }}>
+                          Will be set as Primary image on save
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Existing gallery images (in edit mode) */}
+                  {modalMode === 'edit' && editingVeg && (
+                    <div style={{ marginTop: '0.75rem', borderTop: '1px solid #e2e8f0', paddingTop: '0.75rem' }}>
+                      <span style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
+                        Active Gallery Photos ({editingVeg.images.length}):
+                      </span>
+
+                      {editingVeg.images.length === 0 ? (
+                        <p style={{ fontSize: '0.78rem', color: '#94a3b8', fontStyle: 'italic', margin: 0 }}>
+                          No gallery images uploaded yet. Use Browse Photo above to add one.
+                        </p>
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: '10px' }}>
+                          {editingVeg.images.map((img) => (
+                            <div
+                              key={img.id}
+                              style={{
+                                position: 'relative',
+                                borderRadius: '8px',
+                                overflow: 'hidden',
+                                border: img.isPrimary ? '2px solid #059669' : '1px solid #cbd5e1',
+                                aspectRatio: '1',
+                                backgroundColor: '#000',
+                              }}
+                            >
+                              <img src={img.url} alt="Veg" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              {img.isPrimary && (
+                                <span style={{ position: 'absolute', top: '4px', left: '4px', backgroundColor: '#059669', color: '#fff', fontSize: '0.65rem', fontWeight: 700, padding: '1px 5px', borderRadius: '4px' }}>
+                                  Main
+                                </span>
+                              )}
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  bottom: 0,
+                                  left: 0,
+                                  right: 0,
+                                  backgroundColor: 'rgba(0,0,0,0.7)',
+                                  display: 'flex',
+                                  justifyContent: 'space-around',
+                                  padding: '4px',
+                                }}
+                              >
+                                {!img.isPrimary && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetPrimaryImage(img.id)}
+                                    style={{ background: 'none', border: 'none', color: '#f59e0b', cursor: 'pointer', padding: 0 }}
+                                    title="Make Primary"
+                                  >
+                                    <Star size={14} fill="currentColor" />
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteImage(img.id)}
+                                  style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}
+                                  title="Delete photo"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="modal-actions-footer">
                 <button
                   type="button"
@@ -637,81 +982,24 @@ export const AdminVegetables: React.FC = () => {
                   type="submit"
                   disabled={formSubmitting}
                   className="admin-btn admin-btn--primary"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', fontSize: '0.9rem', fontWeight: 700 }}
                 >
-                  {formSubmitting ? 'Saving...' : modalMode === 'create' ? 'Create Vegetable' : 'Update Vegetable'}
+                  {formSubmitting ? (
+                    'Saving...'
+                  ) : modalMode === 'create' ? (
+                    <>
+                      <Plus size={16} />
+                      <span>Create Vegetable</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle size={16} />
+                      <span>Update Vegetable</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
-
-            {/* Image Gallery Section (Available when editing existing vegetable) */}
-            {modalMode === 'edit' && editingVeg && (
-              <div className="admin-image-management-section">
-                <h4 className="image-section-title">
-                  <ImageIcon size={16} /> Product Image Gallery
-                </h4>
-
-                {imageError && (
-                  <div className="admin-form-alert alert--danger">
-                    <AlertCircle size={15} />
-                    <span>{imageError}</span>
-                  </div>
-                )}
-
-                {/* Upload row */}
-                <div className="image-upload-row">
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={(e) => setSelectedImageFile(e.target.files?.[0] || null)}
-                    className="image-file-input"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleUploadImage}
-                    disabled={!selectedImageFile || uploadingImage}
-                    className="admin-btn admin-btn--secondary"
-                  >
-                    <Upload size={14} />
-                    {uploadingImage ? 'Optimizing...' : 'Upload Image'}
-                  </button>
-                </div>
-
-                {/* Images list */}
-                <div className="images-preview-grid">
-                  {editingVeg.images.length === 0 ? (
-                    <p className="no-images-text">No images uploaded yet.</p>
-                  ) : (
-                    editingVeg.images.map((img) => (
-                      <div key={img.id} className={`image-card ${img.isPrimary ? 'primary-img-card' : ''}`}>
-                        <img src={img.url} alt="Product preview" className="thumb-preview" />
-                        <div className="image-overlay-actions">
-                          {img.isPrimary ? (
-                            <span className="badge-primary-img">Primary</span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleSetPrimaryImage(img.id)}
-                              className="set-primary-btn"
-                              title="Set as main image"
-                            >
-                              <Star size={12} /> Set Primary
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteImage(img.id)}
-                            className="delete-img-btn"
-                            title="Delete image"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
 
           </div>
         </div>

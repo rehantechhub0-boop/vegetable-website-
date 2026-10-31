@@ -8,6 +8,11 @@ import {
   Clock,
   Sparkles,
   RefreshCw,
+  CheckCircle2,
+  CreditCard,
+  Smartphone,
+  Building2,
+  Lock as LockIcon,
 } from 'lucide-react';
 import type { CartEntry } from '../components/VegetableCard';
 
@@ -92,6 +97,38 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   // Retries reuse the same key; only a new attempt generates a new one.
   const idempotencyKeyRef = useRef<string>(generateIdempotencyKey());
 
+  // Payment Method & Advance Online details
+  const [paymentMethod, setPaymentMethod] = useState<'COD' | 'CARD' | 'JAZZCASH' | 'EASYPAISA' | 'BANK_TRANSFER'>('COD');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
+  const [cardName, setCardName] = useState('');
+  const [walletPhone, setWalletPhone] = useState('');
+  const [walletTxnId, setWalletTxnId] = useState('');
+  const [bankTxnId, setBankTxnId] = useState('');
+
+  // Promo Code State
+  const [promoCodeInput, setPromoCodeInput] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<{ code: string; discount: number; description: string } | null>(null);
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
+
+  // Format Card Number (adds spaces every 4 digits)
+  const handleCardNumberChange = (val: string) => {
+    const raw = val.replace(/[^0-9]/g, '').slice(0, 16);
+    const formatted = raw.match(/.{1,4}/g)?.join(' ') || raw;
+    setCardNumber(formatted);
+  };
+
+  // Format Expiry MM/YY
+  const handleExpiryChange = (val: string) => {
+    let raw = val.replace(/[^0-9]/g, '').slice(0, 4);
+    if (raw.length >= 2) {
+      raw = raw.slice(0, 2) + '/' + raw.slice(2);
+    }
+    setCardExpiry(raw);
+  };
+
   // Price-change review state
   const [priceChanges, setPriceChanges] = useState<PriceChangeItem[]>([]);
   const [priceReviewPending, setPriceReviewPending] = useState(false);
@@ -162,7 +199,38 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
 
   // Cart Preview Totals
   const subtotal = cart.reduce((sum, item) => sum + item.itemTotal, 0);
-  const grandTotal = deliveryFee !== null ? subtotal + deliveryFee : subtotal;
+  const discountAmount = appliedPromo ? appliedPromo.discount : 0;
+  const grandTotal = Math.max(0, (deliveryFee !== null ? subtotal + deliveryFee : subtotal) - discountAmount);
+
+  const handleApplyPromo = async () => {
+    if (!promoCodeInput.trim()) return;
+    setPromoLoading(true);
+    setPromoError(null);
+    try {
+      const res = await fetch('/api/v1/promos/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: promoCodeInput.trim().toUpperCase(),
+          subtotal,
+          deliveryFee: deliveryFee ?? 100,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Invalid promo code');
+      }
+      setAppliedPromo({
+        code: data.code,
+        discount: data.discount,
+        description: data.description,
+      });
+    } catch (err: any) {
+      setPromoError(err.message || 'Promo code could not be applied.');
+    } finally {
+      setPromoLoading(false);
+    }
+  };
 
   // Phone validator: Pakistan formats (e.g. 03XXXXXXXXX, +923XXXXXXXXX, 0300-1234567)
   const isValidPkPhone = (val: string) => {
@@ -235,7 +303,24 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
           address: address.trim(),
           notes: notes.trim() ? notes.trim() : null,
         },
-        paymentMethod: 'COD',
+        paymentMethod,
+        paymentTxnRef: paymentMethod === 'CARD'
+          ? `CARD_${cardNumber.replace(/\s/g, '').slice(-4)}_${Date.now()}`
+          : paymentMethod === 'JAZZCASH'
+          ? (walletTxnId.trim() || `JC_${walletPhone.trim() || Date.now()}`)
+          : paymentMethod === 'EASYPAISA'
+          ? (walletTxnId.trim() || `EP_${walletPhone.trim() || Date.now()}`)
+          : paymentMethod === 'BANK_TRANSFER'
+          ? (bankTxnId.trim() || `IBFT_${Date.now()}`)
+          : null,
+        cardDetails: paymentMethod === 'CARD' ? {
+          cardholderName: cardName.trim(),
+          cardLast4: cardNumber.replace(/\s/g, '').slice(-4),
+          cardBrand: cardNumber.startsWith('4') ? 'Visa' : 'Mastercard',
+        } : null,
+        walletNumber: (paymentMethod === 'JAZZCASH' || paymentMethod === 'EASYPAISA') ? (walletPhone.trim() || null) : null,
+        promoCode: appliedPromo ? appliedPromo.code : null,
+        discountAmount: appliedPromo ? appliedPromo.discount : null,
         items: cart.map((item) => ({
           vegetableId: item.vegetable.id,
           weightInKg: item.weightInKg,
@@ -529,37 +614,306 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                 </div>
               </div>
 
-              {/* Section 3: Payment Method */}
+              {/* Section 3: Payment Method (Advance & COD) */}
               <div className="checkout-form-section">
                 <div className="checkout-section-header">
                   <span className="checkout-section-number">3</span>
                   <div>
-                    <h2 className="checkout-section-title">Payment Method</h2>
-                    <p className="checkout-section-desc">Safe payment on delivery.</p>
+                    <h2 className="checkout-section-title">Payment Method (ادائیگی کا طریقہ)</h2>
+                    <p className="checkout-section-desc">Apni sahulat ke mutabiq Cash on Delivery ya Advance Card/Wallet muntakhab karein.</p>
                   </div>
                 </div>
 
-                <div className="checkout-payment-box">
-                  <div className="checkout-payment-radio-wrap">
-                    <input
-                      type="radio"
-                      id="payment-cod"
-                      name="payment-method"
-                      checked
-                      readOnly
-                      className="checkout-payment-radio"
-                    />
-                    <label htmlFor="payment-cod" className="checkout-payment-label">
-                      <div className="checkout-payment-title-row">
-                        <span className="checkout-payment-title">Cash on Delivery (COD)</span>
-                        <span className="badge badge-offer">Pay at Doorstep</span>
+                {fieldErrors.card && (
+                  <div className="checkout-alert checkout-alert-error" style={{ marginBottom: '1rem' }}>
+                    <AlertCircle size={16} />
+                    <span>{fieldErrors.card}</span>
+                  </div>
+                )}
+
+                {fieldErrors.wallet && (
+                  <div className="checkout-alert checkout-alert-error" style={{ marginBottom: '1rem' }}>
+                    <AlertCircle size={16} />
+                    <span>{fieldErrors.wallet}</span>
+                  </div>
+                )}
+
+                {/* Payment Option Tabs Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px', marginBottom: '1.25rem' }}>
+                  {/* Option 1: COD */}
+                  <div
+                    onClick={() => setPaymentMethod('COD')}
+                    style={{
+                      padding: '12px 14px',
+                      borderRadius: '12px',
+                      border: paymentMethod === 'COD' ? '2px solid #059669' : '1px solid var(--border-subtle)',
+                      backgroundColor: paymentMethod === 'COD' ? '#ecfdf5' : '#ffffff',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      boxShadow: paymentMethod === 'COD' ? '0 4px 12px rgba(5,150,105,0.1)' : 'none',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: '#064e3b', fontSize: '0.9rem' }}>
+                        <span>💵 Cash on Delivery</span>
                       </div>
-                      <p className="checkout-payment-desc">
-                        Pay with cash directly to our rider once your fresh vegetables arrive.
-                      </p>
-                    </label>
+                      {paymentMethod === 'COD' && <CheckCircle2 size={16} color="#059669" />}
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                      Ghar par sabzi check karne ke baad rider ko cash ada karein.
+                    </p>
+                  </div>
+
+                  {/* Option 2: Card */}
+                  <div
+                    onClick={() => setPaymentMethod('CARD')}
+                    style={{
+                      padding: '12px 14px',
+                      borderRadius: '12px',
+                      border: paymentMethod === 'CARD' ? '2px solid #059669' : '1px solid var(--border-subtle)',
+                      backgroundColor: paymentMethod === 'CARD' ? '#ecfdf5' : '#ffffff',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      boxShadow: paymentMethod === 'CARD' ? '0 4px 12px rgba(5,150,105,0.1)' : 'none',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: '#064e3b', fontSize: '0.9rem' }}>
+                        <span>💳 Debit / Credit Card</span>
+                      </div>
+                      {paymentMethod === 'CARD' && <CheckCircle2 size={16} color="#059669" />}
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                      Visa, Mastercard ya PayPak card se direct advance payment.
+                    </p>
+                  </div>
+
+                  {/* Option 3: JazzCash */}
+                  <div
+                    onClick={() => setPaymentMethod('JAZZCASH')}
+                    style={{
+                      padding: '12px 14px',
+                      borderRadius: '12px',
+                      border: paymentMethod === 'JAZZCASH' ? '2px solid #059669' : '1px solid var(--border-subtle)',
+                      backgroundColor: paymentMethod === 'JAZZCASH' ? '#ecfdf5' : '#ffffff',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      boxShadow: paymentMethod === 'JAZZCASH' ? '0 4px 12px rgba(5,150,105,0.1)' : 'none',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: '#064e3b', fontSize: '0.9rem' }}>
+                        <span>📱 JazzCash Mobile</span>
+                      </div>
+                      {paymentMethod === 'JAZZCASH' && <CheckCircle2 size={16} color="#059669" />}
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                      JazzCash Mobile Account ya QR se instant transfer.
+                    </p>
+                  </div>
+
+                  {/* Option 4: EasyPaisa */}
+                  <div
+                    onClick={() => setPaymentMethod('EASYPAISA')}
+                    style={{
+                      padding: '12px 14px',
+                      borderRadius: '12px',
+                      border: paymentMethod === 'EASYPAISA' ? '2px solid #059669' : '1px solid var(--border-subtle)',
+                      backgroundColor: paymentMethod === 'EASYPAISA' ? '#ecfdf5' : '#ffffff',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      boxShadow: paymentMethod === 'EASYPAISA' ? '0 4px 12px rgba(5,150,105,0.1)' : 'none',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: '#064e3b', fontSize: '0.9rem' }}>
+                        <span>📱 EasyPaisa Mobile</span>
+                      </div>
+                      {paymentMethod === 'EASYPAISA' && <CheckCircle2 size={16} color="#059669" />}
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                      EasyPaisa App ya account se ba-sahulat advance adaegi.
+                    </p>
+                  </div>
+
+                  {/* Option 5: Bank Transfer */}
+                  <div
+                    onClick={() => setPaymentMethod('BANK_TRANSFER')}
+                    style={{
+                      padding: '12px 14px',
+                      borderRadius: '12px',
+                      border: paymentMethod === 'BANK_TRANSFER' ? '2px solid #059669' : '1px solid var(--border-subtle)',
+                      backgroundColor: paymentMethod === 'BANK_TRANSFER' ? '#ecfdf5' : '#ffffff',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      boxShadow: paymentMethod === 'BANK_TRANSFER' ? '0 4px 12px rgba(5,150,105,0.1)' : 'none',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: '#064e3b', fontSize: '0.9rem' }}>
+                        <span>🏦 Bank Transfer (IBFT)</span>
+                      </div>
+                      {paymentMethod === 'BANK_TRANSFER' && <CheckCircle2 size={16} color="#059669" />}
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                      Direct online banking / Raast se store account me bheinjein.
+                    </p>
                   </div>
                 </div>
+
+                {/* Sub-Panel: Card Details Input */}
+                {paymentMethod === 'CARD' && (
+                  <div style={{ padding: '1.25rem', borderRadius: '12px', backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>
+                        <CreditCard size={18} color="#059669" />
+                        <span>Card Details (Visa / Mastercard)</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.75rem', color: '#15803d', fontWeight: 600 }}>
+                        <LockIcon size={13} />
+                        <span>256-Bit Encrypted</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                        Cardholder Name (Card Par Mojood Naam)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Asad Ali"
+                        value={cardName}
+                        onChange={(e) => setCardName(e.target.value)}
+                        required={paymentMethod === 'CARD'}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem', outline: 'none' }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                        Card Number (16 Digits)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="4214 •••• •••• ••••"
+                        value={cardNumber}
+                        onChange={(e) => handleCardNumberChange(e.target.value)}
+                        maxLength={19}
+                        required={paymentMethod === 'CARD'}
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem', fontFamily: 'monospace', outline: 'none' }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                          Expiry Date (MM/YY)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="MM/YY"
+                          value={cardExpiry}
+                          onChange={(e) => handleExpiryChange(e.target.value)}
+                          maxLength={5}
+                          required={paymentMethod === 'CARD'}
+                          style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem', outline: 'none' }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                          Security Code (CVV / 3 Digits)
+                        </label>
+                        <input
+                          type="password"
+                          placeholder="•••"
+                          value={cardCvv}
+                          onChange={(e) => setCardCvv(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
+                          maxLength={4}
+                          required={paymentMethod === 'CARD'}
+                          style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.875rem', outline: 'none' }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Sub-Panel: JazzCash / EasyPaisa Details */}
+                {(paymentMethod === 'JAZZCASH' || paymentMethod === 'EASYPAISA') && (
+                  <div style={{ padding: '1.25rem', borderRadius: '12px', backgroundColor: '#fffbeb', border: '1px solid #fde68a', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#92400e', fontWeight: 700, fontSize: '0.875rem' }}>
+                      <Smartphone size={18} />
+                      <span>{paymentMethod === 'JAZZCASH' ? 'JazzCash' : 'EasyPaisa'} Store Receiver Account</span>
+                    </div>
+
+                    <div style={{ backgroundColor: '#ffffff', padding: '10px 14px', borderRadius: '8px', border: '1px solid #fef3c7' }}>
+                      <div style={{ fontSize: '0.8rem', color: '#78350f' }}>Account Title: <strong>Rehan Qadri (Store Owner)</strong></div>
+                      <div style={{ fontSize: '0.8rem', color: '#78350f', marginTop: '2px' }}>
+                        Receiver Mobile Number: <strong style={{ fontSize: '1rem', color: '#065f46' }}>0342-7883728</strong>
+                      </div>
+                      <p style={{ fontSize: '0.73rem', color: '#92400e', marginTop: '4px', margin: 0 }}>
+                        Apne {paymentMethod === 'JAZZCASH' ? 'JazzCash' : 'EasyPaisa'} app se Rs. {grandTotal.toLocaleString()} is number par bheinjein aur neeche apna phone/TID darj karein.
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '4px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#78350f', marginBottom: '4px' }}>
+                          Aap Ka Mobile Account Number
+                        </label>
+                        <input
+                          type="tel"
+                          placeholder="03XXXXXXXXX"
+                          value={walletPhone}
+                          onChange={(e) => setWalletPhone(e.target.value)}
+                          style={{ width: '100%', padding: '7px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', outline: 'none' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#78350f', marginBottom: '4px' }}>
+                          Transaction ID (TID optional)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 02938172931"
+                          value={walletTxnId}
+                          onChange={(e) => setWalletTxnId(e.target.value)}
+                          style={{ width: '100%', padding: '7px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', outline: 'none' }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Sub-Panel: Direct Bank Transfer */}
+                {paymentMethod === 'BANK_TRANSFER' && (
+                  <div style={{ padding: '1.25rem', borderRadius: '12px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1e40af', fontWeight: 700, fontSize: '0.875rem' }}>
+                      <Building2 size={18} />
+                      <span>Store Bank Account Details (IBFT)</span>
+                    </div>
+
+                    <div style={{ backgroundColor: '#ffffff', padding: '10px 14px', borderRadius: '8px', border: '1px solid #dbeafe' }}>
+                      <div style={{ fontSize: '0.8rem', color: '#1e3a8a' }}>Bank Name: <strong>Meezan Bank / HBL</strong></div>
+                      <div style={{ fontSize: '0.8rem', color: '#1e3a8a', marginTop: '2px' }}>Account Title: <strong>Rehan Qadri</strong></div>
+                      <div style={{ fontSize: '0.8rem', color: '#1e3a8a', marginTop: '2px' }}>Account / Raast ID: <strong style={{ color: '#059669', fontSize: '0.95rem' }}>03427883728</strong></div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>IBAN: <strong>PK74MEZN000342788372801</strong></div>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#1e40af', marginBottom: '4px' }}>
+                        Bank Transaction Reference / Sender Name
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Paid from Meezan App / Ref# 982173"
+                        value={bankTxnId}
+                        onChange={(e) => setBankTxnId(e.target.value)}
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', outline: 'none' }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Place Order CTA on mobile/desktop form */}
@@ -619,6 +973,53 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                 })}
               </div>
 
+              {/* Promo / Voucher Code Input Box */}
+              <div style={{ marginTop: '1rem', marginBottom: '1rem', padding: '12px', borderRadius: '12px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  🎟️ Have a Promo / Discount Code?
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    placeholder="e.g. TAAZA10, FREESHIP"
+                    value={promoCodeInput}
+                    onChange={(e) => { setPromoCodeInput(e.target.value.toUpperCase()); setPromoError(null); }}
+                    disabled={Boolean(appliedPromo) || promoLoading}
+                    style={{ flex: 1, padding: '7px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', textTransform: 'uppercase', fontSize: '0.85rem', fontWeight: 600, outline: 'none' }}
+                  />
+                  {appliedPromo ? (
+                    <button
+                      type="button"
+                      onClick={() => { setAppliedPromo(null); setPromoCodeInput(''); }}
+                      className="btn"
+                      style={{ padding: '7px 12px', fontSize: '0.78rem', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '8px', border: '1px solid #fecaca', cursor: 'pointer' }}
+                    >
+                      Remove
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleApplyPromo}
+                      disabled={promoLoading || !promoCodeInput.trim()}
+                      className="btn btn-primary"
+                      style={{ padding: '7px 14px', fontSize: '0.78rem', borderRadius: '8px', cursor: 'pointer' }}
+                    >
+                      {promoLoading ? 'Checking…' : 'Apply'}
+                    </button>
+                  )}
+                </div>
+                {promoError && (
+                  <div style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '6px', fontWeight: 500 }}>
+                    ⚠️ {promoError}
+                  </div>
+                )}
+                {appliedPromo && (
+                  <div style={{ fontSize: '0.75rem', color: '#059669', marginTop: '6px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <CheckCircle2 size={13} color="#059669" /> {appliedPromo.description} (-Rs. {appliedPromo.discount})
+                  </div>
+                )}
+              </div>
+
               {/* Subtotal, Delivery, Grand Total */}
               <div className="checkout-summary-breakdown">
                 <div className="checkout-breakdown-row">
@@ -636,6 +1037,13 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                     )}
                   </span>
                 </div>
+
+                {appliedPromo && (
+                  <div className="checkout-breakdown-row" style={{ color: '#059669', fontWeight: 600 }}>
+                    <span>Promo Discount ({appliedPromo.code})</span>
+                    <span className="checkout-breakdown-val">-Rs. {appliedPromo.discount.toLocaleString()}</span>
+                  </div>
+                )}
 
                 <div className="checkout-breakdown-divider" />
 

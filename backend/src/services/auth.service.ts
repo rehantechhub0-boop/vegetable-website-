@@ -139,6 +139,17 @@ export async function loginUser(prisma: PrismaClient, data: LoginDTO): Promise<{
     throw new AuthError('Invalid email or password.', 401);
   }
 
+  // Ensure Owner role for designated owner email
+  if (emailClean === 'rehan.techhub0@gmail.com' && user.role !== 'OWNER') {
+    user.role = 'OWNER';
+    try {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { role: 'OWNER' },
+      });
+    } catch {}
+  }
+
   const sanitized = sanitizeUser(user);
   const token = generateToken(sanitized);
 
@@ -157,21 +168,29 @@ export async function googleLoginWithPayload(
     },
   });
 
+  const isOwnerEmail = emailClean === 'rehan.techhub0@gmail.com';
+  const roleToSet = isOwnerEmail ? 'OWNER' : 'CUSTOMER';
+
   if (!user) {
     user = await prisma.user.create({
       data: {
         name: googleProfile.name,
         email: emailClean,
         googleId: googleProfile.googleId,
-        role: 'CUSTOMER',
+        role: roleToSet,
       },
     });
-  } else if (!user.googleId) {
-    // Link googleId to existing user
-    user = await prisma.user.update({
-      where: { id: user.id },
-      data: { googleId: googleProfile.googleId },
-    });
+  } else {
+    const updateData: any = {};
+    if (!user.googleId) updateData.googleId = googleProfile.googleId;
+    if (isOwnerEmail && user.role !== 'OWNER') updateData.role = 'OWNER';
+
+    if (Object.keys(updateData).length > 0) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: updateData,
+      });
+    }
   }
 
   const sanitized = sanitizeUser(user);

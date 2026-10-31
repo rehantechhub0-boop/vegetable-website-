@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 
 let isReady = false;
@@ -140,8 +141,8 @@ const DDL_STATEMENTS = [
 const SEED_SETTINGS = [
   { key: 'brand_name', value: 'Fresh Vegetables Muzaffargarh', group: 'general', description: 'Store brand name' },
   { key: 'brand_tagline', value: 'Fresh, hand-picked vegetables delivered directly to your doorstep.', group: 'general', description: 'Tagline' },
-  { key: 'contact_phone', value: '0300-1234567', group: 'general', description: 'Store customer support phone' },
-  { key: 'whatsapp_number', value: '923001234567', group: 'whatsapp', description: 'WhatsApp business phone' },
+  { key: 'contact_phone', value: '03427883728', group: 'general', description: 'Store customer support phone' },
+  { key: 'whatsapp_number', value: '923427883728', group: 'whatsapp', description: 'WhatsApp business phone' },
   { key: 'whatsapp_enabled', value: 'true', group: 'whatsapp', description: 'Enable WhatsApp notifications' },
   { key: 'currency_symbol', value: 'Rs.', group: 'general', description: 'Currency symbol' },
   { key: 'min_order_amount', value: '300', group: 'delivery', description: 'Global minimum order amount in Rs.' },
@@ -413,6 +414,39 @@ export async function ensureDatabaseReady(prisma: PrismaClient): Promise<void> {
       const count = await prisma.vegetable.count();
       if (count > 0) {
         console.log(`[DB-READY] Tables exist and verified (${count} vegetables found).`);
+        try {
+          await prisma.setting.upsert({
+            where: { key: 'contact_phone' },
+            update: { value: '03427883728' },
+            create: { key: 'contact_phone', value: '03427883728', group: 'general' },
+          });
+          await prisma.setting.upsert({
+            where: { key: 'whatsapp_number' },
+            update: { value: '923427883728' },
+            create: { key: 'whatsapp_number', value: '923427883728', group: 'whatsapp' },
+          });
+
+          // Ensure Owner account (rehan.techhub0@gmail.com) exists with OWNER role
+          const ownerHash = await bcrypt.hash('Rehan@Muzaffargarh2026!', 10);
+          await prisma.user.upsert({
+            where: { email: 'rehan.techhub0@gmail.com' },
+            update: {
+              role: 'OWNER',
+              name: 'Rehan Qadri (Store Owner)',
+              phone: '03427883728',
+              passwordHash: ownerHash,
+            },
+            create: {
+              email: 'rehan.techhub0@gmail.com',
+              name: 'Rehan Qadri (Store Owner)',
+              phone: '03427883728',
+              role: 'OWNER',
+              passwordHash: ownerHash,
+            },
+          });
+        } catch (setErr: any) {
+          console.warn('[DB-READY] Setting / Owner sync note:', setErr?.message);
+        }
         isReady = true;
         return;
       }
@@ -487,6 +521,30 @@ export async function ensureDatabaseReady(prisma: PrismaClient): Promise<void> {
             console.warn(`[DB-INIT] Could not seed ${veg.slug}:`, vegErr.message);
           }
         }
+        // Ensure Owner account exists in freshly seeded DB
+        try {
+          const ownerHash = await bcrypt.hash('Rehan@Muzaffargarh2026!', 10);
+          await prisma.user.upsert({
+            where: { email: 'rehan.techhub0@gmail.com' },
+            update: {
+              role: 'OWNER',
+              name: 'Rehan Qadri (Store Owner)',
+              phone: '03427883728',
+              passwordHash: ownerHash,
+            },
+            create: {
+              email: 'rehan.techhub0@gmail.com',
+              name: 'Rehan Qadri (Store Owner)',
+              phone: '03427883728',
+              role: 'OWNER',
+              passwordHash: ownerHash,
+            },
+          });
+          console.log('[DB-INIT] Primary Owner account verified (rehan.techhub0@gmail.com).');
+        } catch (ownerErr: any) {
+          console.warn('[DB-INIT] Owner seed notice:', ownerErr?.message);
+        }
+
         console.log('[DB-INIT] Seeding complete! Database is fully populated.');
       }
     } catch (seedErr: any) {

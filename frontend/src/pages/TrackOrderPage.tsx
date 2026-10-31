@@ -141,20 +141,8 @@ export const TrackOrderPage: React.FC<TrackOrderPageProps> = ({
     const cleanNum = orderInput.trim();
     const cleanPhone = phoneInput.trim();
 
-    if (!cleanNum) {
-      setError('Please enter your Order Number (e.g. ORD-1001).');
-      return;
-    }
-
-    // If customer is authenticated, try fetching via ownership-protected endpoint first
-    if (authUser && !cleanPhone) {
-      fetchOrderByOrderNumber(cleanNum);
-      return;
-    }
-
-    // Otherwise, perform verified guest lookup requiring phone verification
-    if (!cleanPhone) {
-      setError('Please provide the contact phone number used during checkout for security verification.');
+    if (!cleanNum && !cleanPhone) {
+      setError('Please enter either your Order Number or your Phone Number.');
       return;
     }
 
@@ -166,14 +154,14 @@ export const TrackOrderPage: React.FC<TrackOrderPageProps> = ({
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          orderNumber: cleanNum,
-          phone: cleanPhone,
+          orderNumber: cleanNum || undefined,
+          phone: cleanPhone || (cleanNum.startsWith('03') ? cleanNum : undefined),
         }),
       });
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'No matching order found with the provided details.');
+        throw new Error(data.error || 'No matching order found. Please verify your order number or phone number.');
       }
       setOrder(data.order);
     } catch (err: any) {
@@ -241,84 +229,239 @@ export const TrackOrderPage: React.FC<TrackOrderPageProps> = ({
 
         {/* Search Hero (visible when no order loaded or user wants to search another) */}
         {!order && (
-          <div className="track-order-hero-card">
-            <div className="track-order-hero-icon-wrap" aria-hidden="true">
-              <Truck size={36} className="track-order-hero-icon" />
-            </div>
-            <h1 className="track-order-hero-title">Track Your Vegetable Order</h1>
-            <p className="track-order-hero-subtitle">
-              Enter your Order Number to check live preparation and delivery status in Muzaffargarh.
-            </p>
+          <div style={{ maxWidth: '820px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            {/* Top Glow Card */}
+            <div
+              className="track-order-hero-card"
+              style={{
+                position: 'relative',
+                overflow: 'hidden',
+                border: '2px solid #a7f3d0',
+                borderRadius: '24px',
+                padding: '3rem 2.5rem',
+                boxShadow: '0 20px 40px -15px rgba(5, 150, 105, 0.12)',
+                background: 'linear-gradient(180deg, #ffffff 0%, #fafffc 100%)',
+                textAlign: 'center',
+              }}
+            >
+              {/* Decorative top accent line */}
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '5px', background: 'linear-gradient(90deg, #10b981, #059669, #34d399)' }} />
 
-            <form onSubmit={handleManualLookup} className="track-order-form">
-              <div className="track-form-grid">
-                <div className="form-group">
-                  <label htmlFor="track-order-num" className="form-label">
-                    Order Number <span className="required-star">*</span>
-                  </label>
-                  <div className="track-input-with-icon">
-                    <Search size={18} className="track-input-icon" />
-                    <input
-                      id="track-order-num"
-                      type="text"
-                      className="form-input track-input"
-                      placeholder="e.g. ORD-1001 or 1001"
-                      value={orderInput}
-                      onChange={(e) => setOrderInput(e.target.value)}
-                      required
-                    />
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', padding: '4px 14px', borderRadius: '9999px', fontSize: '0.78rem', fontWeight: 700, marginBottom: '1.25rem' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block', boxShadow: '0 0 8px #10b981' }} />
+                <span>Live Rider & Order Tracking | Muzaffargarh</span>
+              </div>
+
+              <div className="track-order-hero-icon-wrap" aria-hidden="true" style={{ width: '76px', height: '76px', borderRadius: '20px', backgroundColor: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem', boxShadow: '0 8px 20px rgba(16, 185, 129, 0.18)' }}>
+                <Truck size={38} className="track-order-hero-icon" />
+              </div>
+
+              <h1 className="track-order-hero-title" style={{ fontSize: '2rem', fontWeight: 800, color: '#064e3b', marginBottom: '0.5rem' }}>
+                Track Your Vegetable Order
+              </h1>
+              <p className="track-order-hero-subtitle" style={{ fontSize: '0.95rem', color: '#64748b', maxWidth: '520px', margin: '0 auto 1.5rem auto' }}>
+                Apna Order Number ya Phone Number darj karein aur rider ki live location aur delivery status check karein.
+              </p>
+
+              {/* Sample Order Quick Chip */}
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.78rem', color: '#64748b' }}>💡 Quick Check:</span>
+                <button
+                  type="button"
+                  onClick={() => { setOrderInput('1001'); setPhoneInput(''); }}
+                  style={{
+                    background: '#ecfdf5',
+                    border: '1px solid #a7f3d0',
+                    padding: '3px 12px',
+                    borderRadius: '9999px',
+                    fontSize: '0.76rem',
+                    fontWeight: 700,
+                    color: '#047857',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Order #1001
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setPhoneInput('0342-7883728'); setOrderInput(''); }}
+                  style={{
+                    background: '#ecfdf5',
+                    border: '1px solid #a7f3d0',
+                    padding: '3px 12px',
+                    borderRadius: '9999px',
+                    fontSize: '0.76rem',
+                    fontWeight: 700,
+                    color: '#047857',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Phone: 0342-7883728
+                </button>
+              </div>
+
+              <form onSubmit={handleManualLookup} className="track-order-form">
+                <div className="track-form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.25rem', textAlign: 'left' }}>
+                  <div className="form-group">
+                    <label htmlFor="track-order-num" className="form-label" style={{ fontWeight: 700, fontSize: '0.85rem', color: '#334155' }}>
+                      Order Number
+                    </label>
+                    <div className="track-input-with-icon" style={{ position: 'relative' }}>
+                      <Search size={18} className="track-input-icon" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#059669' }} />
+                      <input
+                        id="track-order-num"
+                        type="text"
+                        className="form-input track-input"
+                        placeholder="e.g. ORD-1001 or 1001"
+                        value={orderInput}
+                        onChange={(e) => setOrderInput(e.target.value)}
+                        style={{ paddingLeft: '42px', height: '48px', borderRadius: '12px', border: '1.5px solid #cbd5e1', fontSize: '0.92rem' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="track-order-phone" className="form-label" style={{ fontWeight: 700, fontSize: '0.85rem', color: '#334155' }}>
+                      Or Contact Phone Number
+                    </label>
+                    <div className="track-input-with-icon" style={{ position: 'relative' }}>
+                      <Phone size={18} className="track-input-icon" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#059669' }} />
+                      <input
+                        id="track-order-phone"
+                        type="tel"
+                        className="form-input track-input"
+                        placeholder="e.g. 0342-7883728"
+                        value={phoneInput}
+                        onChange={(e) => setPhoneInput(e.target.value)}
+                        style={{ paddingLeft: '42px', height: '48px', borderRadius: '12px', border: '1.5px solid #cbd5e1', fontSize: '0.92rem' }}
+                      />
+                    </div>
                   </div>
                 </div>
 
-                <div className="form-group">
-                  <label htmlFor="track-order-phone" className="form-label">
-                    Contact Phone Number <span className="required-star">*</span>
-                  </label>
-                  <div className="track-input-with-icon">
-                    <Phone size={18} className="track-input-icon" />
-                    <input
-                      id="track-order-phone"
-                      type="tel"
-                      className="form-input track-input"
-                      placeholder="e.g. 0300-1234567"
-                      value={phoneInput}
-                      onChange={(e) => setPhoneInput(e.target.value)}
-                      required={!authUser}
-                    />
+                <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '0.75rem', textAlign: 'center' }}>
+                  Aap Order Number ya apna Phone Number likh kar foran status check kar sakte hain.
+                </div>
+
+                {error && (
+                  <div className="auth-alert auth-alert-danger" style={{ marginTop: '1.25rem', padding: '10px 16px', borderRadius: '10px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem' }} role="alert">
+                    <AlertCircle size={18} />
+                    <span>{error}</span>
                   </div>
-                  <span className="track-helper-text">
-                    {authUser
-                      ? 'Optional for your logged-in account orders.'
-                      : 'Required for guest order verification.'}
-                  </span>
+                )}
+
+                <button
+                  type="submit"
+                  className="btn btn-primary track-submit-btn"
+                  disabled={loading}
+                  style={{
+                    width: '100%',
+                    marginTop: '1.5rem',
+                    height: '50px',
+                    fontSize: '1rem',
+                    fontWeight: 700,
+                    borderRadius: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '10px',
+                    boxShadow: '0 8px 20px rgba(5, 150, 105, 0.3)',
+                  }}
+                >
+                  {loading ? (
+                    <>
+                      <RefreshCw size={20} className="checkout-spinner" />
+                      Status Check Ho Raha Hai…
+                    </>
+                  ) : (
+                    <>
+                      <Search size={20} />
+                      Track Order Status
+                    </>
+                  )}
+                </button>
+              </form>
+            </div>
+
+            {/* ── 5 LIVE STAGES VISUAL TIMELINE PREVIEW ── */}
+            <div style={{
+              backgroundColor: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: '20px',
+              padding: '2rem 1.75rem',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.03)',
+            }}>
+              <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.08em', backgroundColor: '#ecfdf5', padding: '3px 10px', borderRadius: '9999px' }}>
+                  Step-by-Step Delivery Process
+                </span>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', marginTop: '0.5rem', marginBottom: '0.25rem' }}>
+                  Order Se Delivery Tak Ka Safar
+                </h3>
+                <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0 }}>
+                  Hum rozana har order par in 5 steps ke zariye mukammal taazgi ensure karte hain
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', textAlign: 'center' }}>
+                {ORDER_STEPS.map((st, i) => (
+                  <div key={st.key} style={{ padding: '0.75rem 0.5rem', borderRadius: '12px', backgroundColor: '#f8fafc', border: '1px solid #f1f5f9' }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#ecfdf5', color: '#059669', fontWeight: 800, fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px auto', border: '1.5px solid #10b981' }}>
+                      {i + 1}
+                    </div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b', marginBottom: '3px' }}>
+                      {st.label}
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#64748b', lineHeight: 1.3 }}>
+                      {st.desc}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* ── 4 TRUST GUARANTEE CARDS ── */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+              <div style={{ padding: '1.25rem', borderRadius: '16px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                <div style={{ padding: '8px', borderRadius: '10px', backgroundColor: '#ecfdf5', color: '#059669', flexShrink: 0 }}>
+                  <Truck size={22} />
+                </div>
+                <div>
+                  <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', margin: '0 0 3px 0' }}>30-45 Min Drop</h4>
+                  <p style={{ fontSize: '0.78rem', color: '#64748b', margin: 0 }}>Muzaffargarh city aur bypass ilaaqon me express delivery.</p>
                 </div>
               </div>
 
-              {error && (
-                <div className="auth-alert auth-alert-danger" style={{ marginTop: '1rem' }} role="alert">
-                  <AlertCircle size={18} />
-                  <span>{error}</span>
+              <div style={{ padding: '1.25rem', borderRadius: '16px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                <div style={{ padding: '8px', borderRadius: '10px', backgroundColor: '#eff6ff', color: '#2563eb', flexShrink: 0 }}>
+                  <Scale size={22} />
                 </div>
-              )}
+                <div>
+                  <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', margin: '0 0 3px 0' }}>Certified Digital Scale</h4>
+                  <p style={{ fontSize: '0.78rem', color: '#64748b', margin: 0 }}>100% accurate computerised wazan print guarantee.</p>
+                </div>
+              </div>
 
-              <button
-                type="submit"
-                className="btn btn-primary track-submit-btn"
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <RefreshCw size={18} className="checkout-spinner" />
-                    Checking Status…
-                  </>
-                ) : (
-                  <>
-                    <Search size={18} />
-                    Track Order
-                  </>
-                )}
-              </button>
-            </form>
+              <div style={{ padding: '1.25rem', borderRadius: '16px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                <div style={{ padding: '8px', borderRadius: '10px', backgroundColor: '#fef3c7', color: '#d97706', flexShrink: 0 }}>
+                  <ShieldCheck size={22} />
+                </div>
+                <div>
+                  <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', margin: '0 0 3px 0' }}>100% Cash on Delivery</h4>
+                  <p style={{ fontSize: '0.78rem', color: '#64748b', margin: 0 }}>Pehle sabzi ki taazgi check karein, phir payment karein.</p>
+                </div>
+              </div>
+
+              <div style={{ padding: '1.25rem', borderRadius: '16px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                <div style={{ padding: '8px', borderRadius: '10px', backgroundColor: '#fdf2f8', color: '#db2777', flexShrink: 0 }}>
+                  <Phone size={22} />
+                </div>
+                <div>
+                  <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', margin: '0 0 3px 0' }}>Live Help 0342-7883728</h4>
+                  <p style={{ fontSize: '0.78rem', color: '#64748b', margin: 0 }}>Order me masla ho to foran call ya WhatsApp karein.</p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

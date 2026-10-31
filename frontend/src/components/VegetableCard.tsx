@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ShoppingBag, Check, AlertCircle, Sparkles, Scale, ArrowUpRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ShoppingBag, Check, AlertCircle, Sparkles, Scale, ArrowUpRight, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export interface VegetableItem {
   id: string;
@@ -48,6 +48,7 @@ export const VegetableCard: React.FC<VegetableCardProps> = ({
   const [selectedLabel, setSelectedLabel] = useState<string>('1kg');
   const [customKgInput, setCustomKgInput] = useState<string>('15');
   const [justAdded, setJustAdded] = useState<boolean>(false);
+  const [imgLoaded, setImgLoaded] = useState<boolean>(false);
   const quantity = 1;
 
   /* Pricing calculations */
@@ -58,12 +59,50 @@ export const VegetableCard: React.FC<VegetableCardProps> = ({
   const originalPrice = vegetable.isOffer && vegetable.offerPrice ? vegetable.pricePerKg : null;
   const savingsPerKg = originalPrice ? originalPrice - effectivePricePerKg : 0;
 
-  const rawImg =
+  const rawDefaultImg =
     vegetable.images?.find((i) => i.isPrimary)?.url ??
     vegetable.images?.[0]?.url ??
-    'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800&auto=format&fit=crop&q=80';
+    'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&auto=format&fit=crop&q=75';
+
+  const imagesList = vegetable.images && vegetable.images.length > 0
+    ? vegetable.images
+    : [{ url: rawDefaultImg, isPrimary: true }];
+
+  const [activeImgIndex, setActiveImgIndex] = useState(() => {
+    const pIdx = imagesList.findIndex((i) => i.isPrimary);
+    return pIdx >= 0 ? pIdx : 0;
+  });
+
   const apiBase = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
-  const primaryImg = rawImg.startsWith('http') || !apiBase ? rawImg : `${apiBase}${rawImg}`;
+  const activeRawImg = imagesList[activeImgIndex]?.url || rawDefaultImg;
+  let primaryImg = activeRawImg.startsWith('http') || !apiBase ? activeRawImg : `${apiBase}${activeRawImg}`;
+
+  // Optimize Unsplash images for lightweight, 10x faster card loading
+  if (primaryImg.includes('images.unsplash.com')) {
+    primaryImg = primaryImg.replace(/w=\d+/, 'w=400').replace(/q=\d+/, 'q=75');
+    if (!primaryImg.includes('w=400')) primaryImg += '&w=400';
+    if (!primaryImg.includes('q=75')) primaryImg += '&q=75';
+    if (!primaryImg.includes('auto=format')) primaryImg += '&auto=format';
+  }
+
+  // Automatic gentle image rotation if multiple photos exist in gallery
+  useEffect(() => {
+    if (imagesList.length <= 1) return;
+    const interval = setInterval(() => {
+      setActiveImgIndex((prev) => (prev + 1) % imagesList.length);
+    }, 4500);
+    return () => clearInterval(interval);
+  }, [imagesList.length]);
+
+  const handleNextImg = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setActiveImgIndex((prev) => (prev + 1) % imagesList.length);
+  };
+
+  const handlePrevImg = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setActiveImgIndex((prev) => (prev - 1 + imagesList.length) % imagesList.length);
+  };
 
   let weightInKg = 1.0;
   let weightDisplay = '1kg';
@@ -126,15 +165,118 @@ export const VegetableCard: React.FC<VegetableCardProps> = ({
         }
         aria-label={`View details for ${vegetable.name}`}
       >
+        {/* Skeleton shimmer while loading */}
+        {!imgLoaded && (
+          <div className="absolute inset-0 bg-neutral-800/80 animate-pulse flex items-center justify-center">
+            <span className="text-xs text-emerald-400/80 font-medium tracking-wide">Loading fresh image...</span>
+          </div>
+        )}
+
         <img
           src={primaryImg}
           alt={vegetable.name}
-          className="vip-card-img"
+          className={`vip-card-img transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
           loading="lazy"
+          decoding="async"
+          onLoad={() => setImgLoaded(true)}
+          onError={(e) => {
+            setImgLoaded(true);
+            (e.currentTarget as HTMLImageElement).src =
+              'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400&auto=format&fit=crop&q=75';
+          }}
         />
 
         {/* Ambient Gradient Scrim */}
         <div className="vip-card-img-scrim" />
+
+        {/* Carousel Arrows & Dots if multiple photos in gallery */}
+        {imagesList.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={handlePrevImg}
+              style={{
+                position: 'absolute',
+                left: '6px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                zIndex: 10,
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '50%',
+                width: '26px',
+                height: '26px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                backdropFilter: 'blur(4px)',
+                transition: 'all 0.2s ease',
+              }}
+              title="Previous photo"
+              aria-label="Previous photo"
+            >
+              <ChevronLeft size={16} />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleNextImg}
+              style={{
+                position: 'absolute',
+                right: '6px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                zIndex: 10,
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '50%',
+                width: '26px',
+                height: '26px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                backdropFilter: 'blur(4px)',
+                transition: 'all 0.2s ease',
+              }}
+              title="Next photo"
+              aria-label="Next photo"
+            >
+              <ChevronRight size={16} />
+            </button>
+
+            <div
+              style={{
+                position: 'absolute',
+                bottom: '8px',
+                left: '0',
+                right: '0',
+                display: 'flex',
+                justifyContent: 'center',
+                gap: '4px',
+                zIndex: 10,
+              }}
+            >
+              {imagesList.map((_, dotIdx) => (
+                <span
+                  key={dotIdx}
+                  onClick={(e) => { e.stopPropagation(); setActiveImgIndex(dotIdx); }}
+                  style={{
+                    width: activeImgIndex === dotIdx ? '16px' : '5px',
+                    height: '5px',
+                    borderRadius: '9999px',
+                    backgroundColor: activeImgIndex === dotIdx ? '#10b981' : 'rgba(255, 255, 255, 0.6)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                  }}
+                />
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Floating Top Badges */}
         <div className="vip-card-badges-row">
@@ -321,7 +463,7 @@ export const VegetableCard: React.FC<VegetableCardProps> = ({
             ) : (
               <>
                 <ShoppingBag size={16} />
-                <span>Add to Cart ({weightDisplay} · Rs. {calculatedTotal.toLocaleString()})</span>
+                <span>Add to Cart ({weightDisplay})</span>
               </>
             )}
           </button>

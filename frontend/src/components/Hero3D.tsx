@@ -45,7 +45,7 @@ export const Hero3D: React.FC<Hero3DProps> = ({
       desc: 'Each vegetable is thoroughly inspected, cleaned with pure water, and graded for zero rot or blemishes.',
       badge: 'Zero Chemical Rinse',
       icon: <Droplets size={20} className="text-cyan-400" />,
-      image: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=600&auto=format&fit=crop&q=75',
+      image: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&h=520&auto=format&fit=crop&q=80',
       stat: '100% Inspected',
       accentColor: '#06b6d4',
     },

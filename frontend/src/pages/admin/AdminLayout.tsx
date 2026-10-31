@@ -18,6 +18,7 @@ import { AdminWhatsApp } from './AdminWhatsApp';
 import { AdminPayment } from './AdminPayment';
 import { AdminWebsiteSettings } from './AdminWebsiteSettings';
 import { AdminAccount } from './AdminAccount';
+import { AdminStaff } from './AdminStaff';
 
 export type AdminSection =
   | 'dashboard'
@@ -30,7 +31,8 @@ export type AdminSection =
   | 'whatsapp'
   | 'payment'
   | 'website'
-  | 'account';
+  | 'account'
+  | 'staff';
 
 interface AdminLayoutProps {
   currentSection: AdminSection;
@@ -59,6 +61,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     { id: 'whatsapp', label: 'WhatsApp Settings', icon: <MessageCircle size={18} /> },
     { id: 'payment', label: 'Payment Settings', icon: <CreditCard size={18} /> },
     { id: 'website', label: 'Website Settings', icon: <Globe size={18} /> },
+    { id: 'staff', label: 'Staff & Roles (عملہ)', icon: <Users size={18} /> },
     { id: 'account', label: 'Admin Account', icon: <UserCheck size={18} /> },
   ];
 
@@ -98,6 +101,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         return <AdminWebsiteSettings />;
       case 'account':
         return <AdminAccount />;
+      case 'staff':
+        return <AdminStaff />;
       default:
         return <AdminDashboard onNavigateSection={(sec, param) => onNavigateSection(sec as AdminSection, param)} />;
     }

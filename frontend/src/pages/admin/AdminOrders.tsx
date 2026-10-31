@@ -8,9 +8,14 @@ import {
 interface OrderItem {
   id: string;
   vegetableName: string;
-  weightGrams: number;
-  weightLabel: string;
-  unitPricePerKg: number;
+  weightGrams?: number;
+  weightLabel?: string;
+  unitPricePerKg?: number;
+  weightDisplay?: string;
+  weightInKg?: number;
+  pricePerKg?: number;
+  unitPrice?: number;
+  quantity?: number;
   itemTotal: number;
 }
 
@@ -70,6 +75,56 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
   const [statusNote, setStatusNote] = useState('');
   const [confirmCancelModal, setConfirmCancelModal] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
+
+  // Bulk Selection State
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  const toggleSelectOrder = (id: number) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (orders.length > 0 && selectedIds.length === orders.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(orders.map((o) => o.id));
+    }
+  };
+
+  const handleBulkStatus = async (targetStatus: string) => {
+    if (selectedIds.length === 0) return;
+    if (targetStatus === 'CANCELLED' && !window.confirm(`Are you sure you want to cancel ${selectedIds.length} selected orders?`)) {
+      return;
+    }
+    setBulkLoading(true);
+    try {
+      const res = await fetch('/api/v1/admin/orders/bulk-status', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          orderIds: selectedIds,
+          status: targetStatus,
+          note: `Bulk transitioned to ${targetStatus} by admin`,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Bulk update failed.');
+      }
+      setNotification(`${data.updatedCount} orders updated to ${targetStatus}!`);
+      setTimeout(() => setNotification(null), 4000);
+      setSelectedIds([]);
+      fetchOrders();
+    } catch (err: any) {
+      alert(`Bulk action error: ${err.message}`);
+    } finally {
+      setBulkLoading(false);
+    }
+  };
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -302,9 +357,18 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
             <table className="admin-data-table">
               <thead>
                 <tr>
+                  <th style={{ width: 40, textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={orders.length > 0 && selectedIds.length === orders.length}
+                      onChange={toggleSelectAll}
+                      style={{ cursor: 'pointer', width: 16, height: 16 }}
+                      title="Select all orders"
+                    />
+                  </th>
                   <th>Order #</th>
                   <th>Date & Time</th>
-                  <th>Customer Info</th>
+                  <th>Customer Info & Contact</th>
                   <th>Delivery Area</th>
                   <th>Amount</th>
                   <th>Payment</th>
@@ -313,60 +377,167 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {orders.map((ord) => (
-                  <tr key={ord.id}>
-                    <td>
-                      <span className="font-mono font-bold text-brand">
-                        {ord.orderNumber}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="date-time-cell text-xs text-muted">
-                        {new Date(ord.createdAt).toLocaleDateString('en-PK', {
-                          day: 'numeric',
-                          month: 'short',
-                        })}
-                        <br />
-                        {new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    </td>
-                    <td>
-                      <div className="customer-cell">
-                        <span className="font-semibold text-headline">{ord.customerName}</span>
-                        <span className="text-muted text-xs font-mono">{ord.customerPhone}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="text-sm">{ord.deliveryZone}</div>
-                    </td>
-                    <td>
-                      <span className="font-bold text-headline">Rs. {ord.grandTotal}</span>
-                      <span className="text-xs text-muted block">({ord.itemsCount} items)</span>
-                    </td>
-                    <td>
-                      <span className={`payment-pill ${ord.paymentMethod === 'COD' ? 'pill-cod' : 'pill-online'}`}>
-                        {ord.paymentMethod}
-                      </span>
-                      <span className="text-xs text-muted block mt-1">{ord.paymentStatus}</span>
-                    </td>
-                    <td>
-                      <span className={`status-pill ${getStatusBadge(ord.orderStatus)}`}>
-                        {ord.orderStatus.replace(/_/g, ' ')}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <button
-                        type="button"
-                        onClick={() => loadOrderDetails(ord.orderNumber)}
-                        className="admin-btn admin-btn--secondary btn--sm"
-                      >
-                        <Eye size={13} /> View
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {orders.map((ord) => {
+                  const isChecked = selectedIds.includes(ord.id);
+                  const cleanPhone = ord.customerPhone.replace(/\D/g, '').replace(/^0/, '92');
+                  return (
+                    <tr key={ord.id} style={{ backgroundColor: isChecked ? '#f0fdf4' : undefined }}>
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleSelectOrder(ord.id)}
+                          style={{ cursor: 'pointer', width: 16, height: 16 }}
+                        />
+                      </td>
+                      <td>
+                        <span className="font-mono font-bold text-brand">
+                          {ord.orderNumber}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="date-time-cell text-xs text-muted">
+                          {new Date(ord.createdAt).toLocaleDateString('en-PK', {
+                            day: 'numeric',
+                            month: 'short',
+                          })}
+                          <br />
+                          {new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </td>
+                      <td>
+                        <div className="customer-cell">
+                          <span className="font-semibold text-headline">{ord.customerName}</span>
+                          <span className="text-muted text-xs font-mono">{ord.customerPhone}</span>
+                          <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                            <a
+                              href={`tel:${ord.customerPhone}`}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '2px 7px', borderRadius: '4px', backgroundColor: '#eff6ff', color: '#1d4ed8', fontSize: '0.72rem', textDecoration: 'none', fontWeight: 600, border: '1px solid #bfdbfe' }}
+                              title="Direct Phone Call"
+                            >
+                              📞 Call
+                            </a>
+                            <a
+                              href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(`Assalam-o-Alaikum ${ord.customerName}, Muzaffargarh Fresh Vegetables se aapka order #${ord.orderNumber} update:`)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '2px 7px', borderRadius: '4px', backgroundColor: '#dcfce7', color: '#15803d', fontSize: '0.72rem', textDecoration: 'none', fontWeight: 600, border: '1px solid #bbf7d0' }}
+                              title="Send WhatsApp Message"
+                            >
+                              💬 WhatsApp
+                            </a>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="text-sm">{ord.deliveryZone}</div>
+                      </td>
+                      <td>
+                        <span className="font-bold text-headline">Rs. {ord.grandTotal}</span>
+                        <span className="text-xs text-muted block">({ord.itemsCount} items)</span>
+                      </td>
+                      <td>
+                        <span className={`payment-pill ${ord.paymentMethod === 'COD' ? 'pill-cod' : 'pill-online'}`}>
+                          {ord.paymentMethod}
+                        </span>
+                        <span className="text-xs text-muted block mt-1">{ord.paymentStatus}</span>
+                      </td>
+                      <td>
+                        <span className={`status-pill ${getStatusBadge(ord.orderStatus)}`}>
+                          {ord.orderStatus.replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <button
+                          type="button"
+                          onClick={() => loadOrderDetails(ord.orderNumber)}
+                          className="admin-btn admin-btn--secondary btn--sm"
+                        >
+                          <Eye size={13} /> View
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Floating / Sticky Bulk Action Bar */}
+      {selectedIds.length > 0 && (
+        <div
+          style={{
+            position: 'sticky',
+            bottom: '1rem',
+            zIndex: 100,
+            backgroundColor: '#0f172a',
+            color: '#ffffff',
+            padding: '12px 20px',
+            borderRadius: '12px',
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px',
+            marginTop: '1rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>
+              📦 {selectedIds.length} orders selected
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedIds([])}
+              style={{ backgroundColor: 'transparent', color: '#94a3b8', border: '1px solid #475569', borderRadius: '6px', padding: '4px 8px', fontSize: '0.75rem', cursor: 'pointer' }}
+            >
+              Clear
+            </button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => handleBulkStatus('CONFIRMED')}
+              disabled={bulkLoading}
+              style={{ backgroundColor: '#059669', color: '#fff', border: 'none', padding: '7px 14px', borderRadius: '7px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
+            >
+              ✅ Confirm All
+            </button>
+            <button
+              type="button"
+              onClick={() => handleBulkStatus('PREPARING')}
+              disabled={bulkLoading}
+              style={{ backgroundColor: '#d97706', color: '#fff', border: 'none', padding: '7px 14px', borderRadius: '7px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
+            >
+              👨‍🍳 Mark Preparing
+            </button>
+            <button
+              type="button"
+              onClick={() => handleBulkStatus('OUT_FOR_DELIVERY')}
+              disabled={bulkLoading}
+              style={{ backgroundColor: '#2563eb', color: '#fff', border: 'none', padding: '7px 14px', borderRadius: '7px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
+            >
+              🚚 Out for Delivery
+            </button>
+            <button
+              type="button"
+              onClick={() => handleBulkStatus('DELIVERED')}
+              disabled={bulkLoading}
+              style={{ backgroundColor: '#10b981', color: '#fff', border: 'none', padding: '7px 14px', borderRadius: '7px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
+            >
+              🎉 Mark Delivered
+            </button>
+            <button
+              type="button"
+              onClick={() => handleBulkStatus('CANCELLED')}
+              disabled={bulkLoading}
+              style={{ backgroundColor: '#dc2626', color: '#fff', border: 'none', padding: '7px 14px', borderRadius: '7px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
+            >
+              ❌ Cancel
+            </button>
           </div>
         </div>
       )}
@@ -500,19 +671,57 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedOrder.items.map((item) => (
-                      <tr key={item.id}>
-                        <td className="font-semibold">{item.vegetableName}</td>
-                        <td>
-                          <span className="weight-badge">{item.weightLabel}</span>
-                          <span className="text-muted text-xs ml-1 font-mono">({item.weightGrams}g)</span>
-                        </td>
-                        <td>Rs. {item.unitPricePerKg} / kg</td>
-                        <td style={{ textAlign: 'right' }} className="font-bold text-headline">
-                          Rs. {item.itemTotal}
-                        </td>
-                      </tr>
-                    ))}
+                    {selectedOrder.items.map((item) => {
+                      const weightText =
+                        item.weightDisplay ||
+                        item.weightLabel ||
+                        (item.weightInKg
+                          ? item.weightInKg >= 1
+                            ? `${item.weightInKg}kg`
+                            : `${Math.round(item.weightInKg * 1000)}g`
+                          : item.weightGrams
+                          ? `${item.weightGrams}g`
+                          : '1kg');
+
+                      const ratePerKg =
+                        item.pricePerKg ??
+                        item.unitPricePerKg ??
+                        (item.weightInKg && item.weightInKg > 0
+                          ? Math.round(item.itemTotal / item.weightInKg)
+                          : item.itemTotal);
+
+                      return (
+                        <tr key={item.id}>
+                          <td className="font-semibold">{item.vegetableName}</td>
+                          <td>
+                            <span
+                              className="weight-badge"
+                              style={{
+                                backgroundColor: '#ecfdf5',
+                                color: '#065f46',
+                                border: '1.5px solid #10b981',
+                                padding: '4px 10px',
+                                borderRadius: '8px',
+                                fontWeight: 800,
+                                fontSize: '0.85rem',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                            >
+                              ⚖️ {weightText}
+                            </span>
+                            {item.quantity && item.quantity > 1 && (
+                              <span className="text-muted text-xs ml-1 font-bold"> × {item.quantity}</span>
+                            )}
+                          </td>
+                          <td style={{ fontWeight: 600, color: '#334155' }}>Rs. {ratePerKg} / kg</td>
+                          <td style={{ textAlign: 'right' }} className="font-bold text-headline">
+                            Rs. {item.itemTotal}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <tfoot>
                     <tr>

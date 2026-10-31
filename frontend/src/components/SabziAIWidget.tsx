@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChefHat, X, Sparkles, ShoppingBag, Utensils, Wallet, Check, Clock, Users } from 'lucide-react';
+import { ChefHat, X, Sparkles, ShoppingBag, Utensils, Wallet, Check, Clock, Users, Calendar } from 'lucide-react';
 import { CartEntry, VegetableItem } from './VegetableCard';
 
 interface SmartKitchenWidgetProps {
@@ -126,12 +126,66 @@ const BUDGET_PACKS: BudgetPack[] = [
   },
 ];
 
+interface DayPlan {
+  day: number;
+  dishName: string;
+  category: string;
+  sabziSummary: string;
+  estimatedDailyCost: number;
+}
+
+const MONTHLY_30_DAYS: Record<number, DayPlan[]> = {
+  1: [
+    { day: 1, dishName: 'Dhabba Aloo Palak Handi', category: 'Desi Classic', sabziSummary: '1kg Palak + 1kg Aloo + 500g Tamatar', estimatedDailyCost: 260 },
+    { day: 2, dishName: 'Chatpatti Bhindi Masala', category: 'Crispy Fry', sabziSummary: '1kg Bhindi + 500g Pyaz + 250g Tamatar', estimatedDailyCost: 310 },
+    { day: 3, dishName: 'Daal Mash with Tamatar Fry', category: 'Healthy Daal', sabziSummary: '500g Tamatar + Hari Mirch + Dhaniya Gaddi', estimatedDailyCost: 150 },
+    { day: 4, dishName: 'Phool Gobi & Matar Salan', category: 'Family Special', sabziSummary: '1kg Phool Gobi + 500g Matar + 500g Aloo', estimatedDailyCost: 340 },
+    { day: 5, dishName: 'Desi Shahi Mix Sabzi Handi', category: 'Kids Favorite', sabziSummary: 'Gajar + Matar + Aloo + Shimla Mirch', estimatedDailyCost: 290 },
+    { day: 6, dishName: 'Desi Tori & Chana Daal', category: 'Light & Fresh', sabziSummary: '1kg Desi Tori + 250g Tamatar + Pyaz', estimatedDailyCost: 220 },
+    { day: 7, dishName: 'Sunday Aloo Shimla Mirch Roast', category: 'Weekend Special', sabziSummary: '1kg Shimla Mirch + 1kg Aloo + Salad', estimatedDailyCost: 320 },
+  ],
+  2: [
+    { day: 8, dishName: 'Smoked Baingan Bharta', category: 'Village Taste', sabziSummary: '1kg Baingan + 500g Tamatar + Pyaz', estimatedDailyCost: 210 },
+    { day: 9, dishName: 'Karelay Pyaz Masala', category: 'Sugar & Health Care', sabziSummary: '1kg Karelay + 750g Pyaz + Leemo', estimatedDailyCost: 280 },
+    { day: 10, dishName: 'Punjabi Kadhi Pakora Handi', category: 'Desi Comfort', sabziSummary: 'Palak + Pyaz + Aloo (For Crispy Pakoras)', estimatedDailyCost: 190 },
+    { day: 11, dishName: 'Matar Pulao with Crunchy Salad', category: 'Rice Feast', sabziSummary: '1kg Matar + 500g Kheera + Tamatar', estimatedDailyCost: 310 },
+    { day: 12, dishName: 'Arvi Masala Dum Gravy', category: 'Classic Handi', sabziSummary: '1kg Arvi + 500g Tamatar + Ajwain', estimatedDailyCost: 270 },
+    { day: 13, dishName: 'Lauki (Ghia Kaddu) Daal Handi', category: 'Sunnah Food', sabziSummary: '1kg Gol Kaddu + Tamatar + Hari Mirch', estimatedDailyCost: 180 },
+    { day: 14, dishName: 'Sunday Dhaba Style Aloo Gobi', category: 'Weekend Special', sabziSummary: '1kg Gobi + 1kg Aloo + Adrak Gaddi', estimatedDailyCost: 290 },
+  ],
+  3: [
+    { day: 15, dishName: 'Methi Aloo Desi Bhujia', category: 'Aromatic Winter/Fresh', sabziSummary: '1kg Taaza Methi + 1kg Aloo + Garlic', estimatedDailyCost: 240 },
+    { day: 16, dishName: 'Tinda Desi Masala Handi', category: 'Traditional', sabziSummary: '1kg Desi Teenda + 500g Pyaz + Tamatar', estimatedDailyCost: 220 },
+    { day: 17, dishName: 'Palak Aloo Bhujia & Roti', category: 'Iron Rich', sabziSummary: '1kg Palak + 1kg Aloo + Leemo', estimatedDailyCost: 230 },
+    { day: 18, dishName: 'Shalgam & Aloo Salan', category: 'Sweet & Savory', sabziSummary: '1kg Shalgam + 500g Aloo + Gur/Tamatar', estimatedDailyCost: 190 },
+    { day: 19, dishName: 'Moong Daal Tadka & Zeera Rice', category: 'Light Dinner', sabziSummary: 'Tamatar + Hari Mirch + Fresh Dhaniya', estimatedDailyCost: 140 },
+    { day: 20, dishName: 'Bhindi Do Pyaza Handi', category: 'Restaurant Style', sabziSummary: '1kg Bhindi + 1kg Pyaz + Spices', estimatedDailyCost: 320 },
+    { day: 21, dishName: 'Sunday Vegetable Biryani Feast', category: 'Weekend Special', sabziSummary: 'Aloo + Matar + Gajar + Salad Kheera', estimatedDailyCost: 380 },
+  ],
+  4: [
+    { day: 22, dishName: 'Sarson Ka Saag & Makkhan', category: 'Punjab Heritage', sabziSummary: '2kg Saag + 1kg Bathu/Palak + Hari Mirch', estimatedDailyCost: 290 },
+    { day: 23, dishName: 'Aloo Shimla Mirch Gravy', category: 'Quick Everyday', sabziSummary: '1kg Aloo + 500g Shimla Mirch + Tamatar', estimatedDailyCost: 240 },
+    { day: 24, dishName: 'Daal Palak Super Bowl', category: 'Protein & Iron', sabziSummary: '1kg Palak + Tamatar + Ginger', estimatedDailyCost: 180 },
+    { day: 25, dishName: 'Gobi Gosht / Gobi Aloo Masala', category: 'Royal Handi', sabziSummary: '1kg Gobi + 500g Tamatar + Adrak', estimatedDailyCost: 260 },
+    { day: 26, dishName: 'Lauki (Kashmiri Kaddu) Salan', category: 'Digestive Comfort', sabziSummary: '1kg Lauki + Pyaz + Tamatar', estimatedDailyCost: 170 },
+    { day: 27, dishName: 'Baingan Aloo Bhujia', category: 'Quick Cooking', sabziSummary: '1kg Baingan + 1kg Aloo + Kalonji', estimatedDailyCost: 210 },
+    { day: 28, dishName: 'Karela Pyaz Chatpatta', category: 'Health Booster', sabziSummary: '1kg Karelay + 750g Pyaz', estimatedDailyCost: 270 },
+    { day: 29, dishName: 'Crispy Bhindi Fry & Lemon', category: 'Family Favorite', sabziSummary: '1kg Bhindi + Tamatar + Green Chillies', estimatedDailyCost: 280 },
+    { day: 30, dishName: 'Month-End Grand Mix Sabzi Dastarkhwan', category: 'Grand Celebration', sabziSummary: 'Mixed Produce Harvest Basket (3kg Assorted)', estimatedDailyCost: 350 },
+  ],
+};
+
 export const SabziAIWidget: React.FC<SmartKitchenWidgetProps> = ({ onAddToCart, vegetables = [] }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'recipes' | 'budget'>('recipes');
+  const [activeTab, setActiveTab] = useState<'recipes' | 'budget' | 'plan30'>('recipes');
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe>(READYMADE_RECIPES[0]);
   const [selectedBudget, setSelectedBudget] = useState<BudgetPack>(BUDGET_PACKS[0]);
   const [addedToast, setAddedToast] = useState<string | null>(null);
+
+  // Custom Budget & Family Size State
+  const [customDailyBudget, setCustomDailyBudget] = useState<string>('320');
+  const [familyMembers, setFamilyMembers] = useState<number>(4);
+  const [activePlanWeek, setActivePlanWeek] = useState<number>(1);
 
   const handleAddItems = (items: Array<{ name: string; weight: string; price: number }>) => {
     let count = 0;
@@ -236,39 +290,81 @@ export const SabziAIWidget: React.FC<SmartKitchenWidgetProps> = ({ onAddToCart, 
             )}
 
             {/* 2. FIXED TABS SWITCHER */}
-            <div className="kitchen-tabs-nav">
+            <div className="kitchen-tabs-nav" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
               <button
                 type="button"
                 className={`kitchen-tab-btn ${activeTab === 'recipes' ? 'active' : ''}`}
                 onClick={() => setActiveTab('recipes')}
               >
-                <Utensils size={16} />
-                <span>🍲 Aaj Kya Banayein?</span>
+                <Utensils size={15} />
+                <span>Aaj Kya Banayein?</span>
               </button>
               <button
                 type="button"
                 className={`kitchen-tab-btn ${activeTab === 'budget' ? 'active' : ''}`}
                 onClick={() => setActiveTab('budget')}
               >
-                <Wallet size={16} />
-                <span>💰 Mera Budget</span>
+                <Wallet size={15} />
+                <span>Mera Budget</span>
+              </button>
+              <button
+                type="button"
+                className={`kitchen-tab-btn ${activeTab === 'plan30' ? 'active' : ''}`}
+                onClick={() => setActiveTab('plan30')}
+              >
+                <Calendar size={15} />
+                <span>30-Day Plan</span>
               </button>
             </div>
 
-            {/* 3. FIXED HORIZONTAL CHIPS SELECTOR BAR */}
-            <div className="kitchen-chips-bar">
-              {activeTab === 'recipes'
-                ? READYMADE_RECIPES.map((r) => (
-                    <button
-                      key={r.id}
-                      type="button"
-                      className={`kitchen-chip-pill ${selectedRecipe.id === r.id ? 'active' : ''}`}
-                      onClick={() => setSelectedRecipe(r)}
+            {/* 3. SUB CONTROLS & CHIPS */}
+            {activeTab === 'recipes' && (
+              <div className="kitchen-chips-bar">
+                {READYMADE_RECIPES.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    className={`kitchen-chip-pill ${selectedRecipe.id === r.id ? 'active' : ''}`}
+                    onClick={() => setSelectedRecipe(r)}
+                  >
+                    {r.title}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {activeTab === 'budget' && (
+              <div style={{ padding: '10px 16px', backgroundColor: '#f0fdf4', borderBottom: '1px solid #dcfce7', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Users size={14} color="#059669" />
+                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#065f46' }}>Ghar ke Afraad:</span>
+                    <select
+                      value={familyMembers}
+                      onChange={(e) => setFamilyMembers(Number(e.target.value))}
+                      style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #86efac', fontSize: '0.78rem', backgroundColor: '#fff', fontWeight: 600, outline: 'none' }}
                     >
-                      {r.title}
-                    </button>
-                  ))
-                : BUDGET_PACKS.map((b) => (
+                      <option value={2}>2 Afraad (Chota Ghar)</option>
+                      <option value={4}>4 Afraad (Medium)</option>
+                      <option value={6}>6 Afraad (Bara Ghar)</option>
+                      <option value={8}>8+ Afraad (Joint Family)</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#065f46' }}>Rozana Budget: Rs.</span>
+                    <input
+                      type="number"
+                      value={customDailyBudget}
+                      onChange={(e) => setCustomDailyBudget(e.target.value)}
+                      placeholder="e.g. 350"
+                      style={{ width: '70px', padding: '3px 6px', borderRadius: '6px', border: '1px solid #86efac', fontSize: '0.8rem', fontWeight: 700, outline: 'none' }}
+                    />
+                  </div>
+                </div>
+
+                <div className="kitchen-chips-bar" style={{ padding: 0 }}>
+                  {BUDGET_PACKS.map((b) => (
                     <button
                       key={b.id}
                       type="button"
@@ -278,7 +374,59 @@ export const SabziAIWidget: React.FC<SmartKitchenWidgetProps> = ({ onAddToCart, 
                       {b.budgetLabel}
                     </button>
                   ))}
-            </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'plan30' && (
+              <div style={{ padding: '10px 16px', backgroundColor: '#f0fdf4', borderBottom: '1px solid #dcfce7', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Users size={14} color="#059669" />
+                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#065f46' }}>Family Size:</span>
+                    <select
+                      value={familyMembers}
+                      onChange={(e) => setFamilyMembers(Number(e.target.value))}
+                      style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid #86efac', fontSize: '0.78rem', backgroundColor: '#fff', fontWeight: 600, outline: 'none' }}
+                    >
+                      <option value={2}>2 Afraad</option>
+                      <option value={4}>4 Afraad</option>
+                      <option value={6}>6 Afraad</option>
+                      <option value={8}>8+ Afraad</option>
+                    </select>
+                  </div>
+
+                  <div style={{ fontSize: '0.78rem', color: '#047857', fontWeight: 700 }}>
+                    Monthly Estimated: <strong style={{ color: '#059669', fontSize: '0.9rem' }}>Rs. {(parseFloat(customDailyBudget) || 300) * 30}</strong>
+                  </div>
+                </div>
+
+                {/* 4 Weeks Selector */}
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {[1, 2, 3, 4].map((w) => (
+                    <button
+                      key={w}
+                      type="button"
+                      onClick={() => setActivePlanWeek(w)}
+                      style={{
+                        flex: 1,
+                        padding: '6px 4px',
+                        borderRadius: '6px',
+                        border: activePlanWeek === w ? '2px solid #059669' : '1px solid #cbd5e1',
+                        backgroundColor: activePlanWeek === w ? '#059669' : '#ffffff',
+                        color: activePlanWeek === w ? '#ffffff' : '#334155',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        textAlign: 'center',
+                      }}
+                    >
+                      {w === 1 ? 'Hafta 1 (1-7)' : w === 2 ? 'Hafta 2 (8-14)' : w === 3 ? 'Hafta 3 (15-21)' : 'Hafta 4 (22-30)'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* 4. SCROLLABLE CONTENT BODY */}
             <div className="kitchen-scroll-body">
@@ -317,7 +465,7 @@ export const SabziAIWidget: React.FC<SmartKitchenWidgetProps> = ({ onAddToCart, 
                     <strong>Desi Tip:</strong> {selectedRecipe.instructions}
                   </div>
                 </div>
-              ) : (
+              ) : activeTab === 'budget' ? (
                 <div className="kitchen-recipe-sheet">
                   {/* Budget Header */}
                   <div className="kitchen-sheet-head">
@@ -333,7 +481,7 @@ export const SabziAIWidget: React.FC<SmartKitchenWidgetProps> = ({ onAddToCart, 
                     </div>
                   </div>
 
-                  <p className="kitchen-sheet-desc">{selectedBudget.desc}</p>
+                  <p className="kitchen-sheet-desc">{selectedBudget.desc} ({familyMembers} afraad ke mutabiq)</p>
 
                   {/* Items in Budget */}
                   <div className="kitchen-sheet-ingredients">
@@ -348,6 +496,58 @@ export const SabziAIWidget: React.FC<SmartKitchenWidgetProps> = ({ onAddToCart, 
                       ))}
                     </div>
                   </div>
+                </div>
+              ) : (
+                /* ── 30-DAY MONTHLY PLAN VIEW ── */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ padding: '10px 14px', borderRadius: '10px', backgroundColor: '#fffbeb', border: '1px solid #fde68a', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#92400e' }}>
+                        🗓️ 30 Din Ka Smart Kitchen Schedule (Hafta {activePlanWeek})
+                      </span>
+                      <p style={{ fontSize: '0.72rem', color: '#b45309', margin: '2px 0 0 0' }}>
+                        Rozana taza desi sabzi recipe schedule for {familyMembers} afraad
+                      </p>
+                    </div>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#059669', backgroundColor: '#ffffff', padding: '3px 8px', borderRadius: '6px', border: '1px solid #86efac' }}>
+                      Avg: Rs. {customDailyBudget}/day
+                    </span>
+                  </div>
+
+                  {MONTHLY_30_DAYS[activePlanWeek]?.map((dayPlan) => (
+                    <div
+                      key={dayPlan.day}
+                      style={{
+                        padding: '12px',
+                        borderRadius: '10px',
+                        backgroundColor: '#ffffff',
+                        border: '1px solid #e2e8f0',
+                        boxShadow: '0 2px 5px rgba(0,0,0,0.02)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ backgroundColor: '#059669', color: '#fff', fontSize: '0.7rem', fontWeight: 800, padding: '2px 7px', borderRadius: '9999px' }}>
+                            Day {dayPlan.day}
+                          </span>
+                          <strong style={{ fontSize: '0.85rem', color: '#0f172a' }}>{dayPlan.dishName}</strong>
+                        </div>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#059669' }}>
+                          Rs. {dayPlan.estimatedDailyCost}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#64748b' }}>
+                        <span>🥬 {dayPlan.sabziSummary}</span>
+                        <span style={{ backgroundColor: '#f1f5f9', padding: '1px 6px', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 600 }}>
+                          {dayPlan.category}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -366,7 +566,7 @@ export const SabziAIWidget: React.FC<SmartKitchenWidgetProps> = ({ onAddToCart, 
                     {selectedRecipe.ingredients.reduce((a, b) => a + b.price, 0)})
                   </span>
                 </button>
-              ) : (
+              ) : activeTab === 'budget' ? (
                 <button
                   type="button"
                   className="kitchen-footer-action-btn"
@@ -375,6 +575,26 @@ export const SabziAIWidget: React.FC<SmartKitchenWidgetProps> = ({ onAddToCart, 
                   <ShoppingBag size={18} />
                   <span>
                     Add this Budget Basket to Cart (Rs. {selectedBudget.totalPrice})
+                  </span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="kitchen-footer-action-btn"
+                  onClick={() => {
+                    const weekItems = [
+                      { name: 'Aloo (Farm Fresh Potatoes)', weight: `${familyMembers >= 6 ? '3kg' : '2kg'}`, price: familyMembers >= 6 ? 285 : 190 },
+                      { name: 'Tamatar (Red Tomatoes)', weight: '1kg', price: 145 },
+                      { name: 'Pyaz (Red Onions)', weight: '1kg', price: 130 },
+                      { name: 'Palak (Farm Fresh Spinach)', weight: '1kg', price: 85 },
+                      { name: 'Dhaniya & Hari Mirch Gaddi', weight: 'Bundle', price: 20 },
+                    ];
+                    handleAddItems(weekItems);
+                  }}
+                >
+                  <ShoppingBag size={18} />
+                  <span>
+                    Add Hafta {activePlanWeek} Fresh Basket to Cart (Rs. {familyMembers >= 6 ? '670' : '570'})
                   </span>
                 </button>
               )}

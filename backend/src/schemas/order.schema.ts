@@ -15,9 +15,18 @@ export const createOrderSchema = z.object({
     address: z.string().trim().min(5, { message: 'Complete delivery address is required' }),
     notes: z.string().trim().max(500).optional().nullable(),
   }),
-  paymentMethod: z.enum(['COD', 'ADVANCE_ONLINE', 'CARD'], {
-    errorMap: () => ({ message: 'Invalid payment method. Supported methods: COD, ADVANCE_ONLINE, CARD' }),
+  paymentMethod: z.enum(['COD', 'ADVANCE_ONLINE', 'CARD', 'JAZZCASH', 'EASYPAISA', 'BANK_TRANSFER'], {
+    errorMap: () => ({ message: 'Invalid payment method. Supported methods: COD, CARD, JAZZCASH, EASYPAISA, BANK_TRANSFER' }),
   }),
+  paymentTxnRef: z.string().trim().max(128).optional().nullable(),
+  walletNumber: z.string().trim().max(30).optional().nullable(),
+  promoCode: z.string().trim().max(50).optional().nullable(),
+  discountAmount: z.number().min(0).optional().nullable(),
+  cardDetails: z.object({
+    cardholderName: z.string().trim().optional(),
+    cardLast4: z.string().trim().optional(),
+    cardBrand: z.string().trim().optional(),
+  }).optional().nullable(),
   items: z.array(
     z.object({
       vegetableId: z.string().trim().min(1, { message: 'vegetableId is required' }),

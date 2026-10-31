@@ -5,7 +5,11 @@ interface LiveTickerProps {
   contactPhone?: string;
 }
 
-export const LiveTicker: React.FC<LiveTickerProps> = ({ contactPhone = '0300-1234567' }) => {
+export const LiveTicker: React.FC<LiveTickerProps> = ({
+  contactPhone = '0342-7883728',
+}) => {
+  const displayPhone = contactPhone && !contactPhone.includes('0300') ? contactPhone : '0342-7883728';
+
   const tickerItems = [
     {
       badge: 'LIVE MANDI',
@@ -87,11 +91,16 @@ export const LiveTicker: React.FC<LiveTickerProps> = ({ contactPhone = '0300-123
         </div>
       </div>
 
-      {/* Right side contact pill */}
+      {/* Right side contact pill showing ONLY telephone helpline */}
       <div className="live-ticker-contact-wrap">
-        <a href={`tel:${contactPhone}`} className="live-ticker-phone">
+        <a
+          href={`tel:${displayPhone.replace(/[^0-9+]/g, '')}`}
+          className="live-ticker-phone"
+          title="Direct Call Helpline"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+        >
           <Phone size={12} />
-          <span>{contactPhone}</span>
+          <span>{displayPhone}</span>
         </a>
       </div>
     </div>

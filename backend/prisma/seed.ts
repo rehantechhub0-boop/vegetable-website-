@@ -10,8 +10,8 @@ async function main() {
   const defaultSettings = [
     { key: 'brand_name', value: 'Fresh Vegetables Muzaffargarh', group: 'general', description: 'Store brand name' },
     { key: 'brand_tagline', value: 'Fresh, hand-picked vegetables delivered directly to your doorstep.', group: 'general', description: 'Tagline' },
-    { key: 'contact_phone', value: '0300-1234567', group: 'general', description: 'Store customer support phone' },
-    { key: 'whatsapp_number', value: '923001234567', group: 'whatsapp', description: 'WhatsApp business phone' },
+    { key: 'contact_phone', value: '0342-7883728', group: 'general', description: 'Store customer support phone' },
+    { key: 'whatsapp_number', value: '923427883728', group: 'whatsapp', description: 'WhatsApp business phone' },
     { key: 'whatsapp_enabled', value: 'true', group: 'whatsapp', description: 'Enable WhatsApp notifications' },
     { key: 'currency_symbol', value: 'Rs.', group: 'general', description: 'Currency symbol' },
     { key: 'min_order_amount', value: '300', group: 'delivery', description: 'Global minimum order amount in Rs.' },
@@ -26,10 +26,29 @@ async function main() {
     });
   }
 
-  // 2. Admin User
+  // 2. Primary Store Owner & Super Admin
+  const ownerPasswordHash = await bcrypt.hash('Rehan@Muzaffargarh2026!', 10);
+  await prisma.user.upsert({
+    where: { email: 'rehan.techhub0@gmail.com' },
+    update: {
+      name: 'Rehan Qadri (Store Owner)',
+      phone: '03427883728',
+      passwordHash: ownerPasswordHash,
+      role: 'OWNER',
+    },
+    create: {
+      name: 'Rehan Qadri (Store Owner)',
+      email: 'rehan.techhub0@gmail.com',
+      phone: '03427883728',
+      passwordHash: ownerPasswordHash,
+      role: 'OWNER',
+    },
+  });
+
+  // 2b. Store Admin/Manager
   const adminPasswordHash = await bcrypt.hash('Admin@Sabzi2026!', 10);
-  const adminUser = await prisma.user.upsert({
-    where: { phone: '03000000000' },
+  await prisma.user.upsert({
+    where: { email: 'admin@freshvegetables.pk' },
     update: {},
     create: {
       name: 'Store Manager',
@@ -403,3 +422,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+

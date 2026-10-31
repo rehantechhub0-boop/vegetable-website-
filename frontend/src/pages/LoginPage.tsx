@@ -1,6 +1,6 @@
 import type React from 'react';
-import { useState, useEffect } from 'react';
-import { Leaf, AlertCircle, ArrowRight, Lock, Mail, ArrowLeft, ShieldCheck, Zap } from 'lucide-react';
+import { useState } from 'react';
+import { Leaf, AlertCircle, ArrowRight, Lock, Mail, ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
 import { GoogleSignInModal } from '../components/GoogleSignInModal';
@@ -22,35 +22,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [googleNotice, setGoogleNotice] = useState<string | null>(null);
-  const [showStaffMode, setShowStaffMode] = useState(false);
   const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
 
   const setUser = useAuthStore((s) => s.setUser);
 
-  // Check if directed from admin route
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const sp = new URLSearchParams(window.location.search);
-      if (sp.get('portal') === 'staff' || window.location.pathname.includes('admin')) {
-        setShowStaffMode(true);
-      }
-    }
-  }, []);
-
-  // Quick fill admin credentials
-  const fillAdminCredentials = () => {
-    setEmail('admin@freshvegetables.pk');
-    setPassword('Admin@Sabzi2026!');
-    setError(null);
-  };
-
-  const handleSubmit = async (e?: React.FormEvent, customCreds?: { email: string; pass: string }) => {
+  const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setError(null);
     setGoogleNotice(null);
 
-    const submitEmail = customCreds ? customCreds.email : email.trim();
-    const submitPass = customCreds ? customCreds.pass : password;
+    const submitEmail = email.trim();
+    const submitPass = password;
 
     if (!submitEmail || !submitPass) {
       setError('Please provide both your email address and password.');
@@ -79,15 +61,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleQuickAdminLogin = () => {
-    setEmail('admin@freshvegetables.pk');
-    setPassword('Admin@Sabzi2026!');
-    handleSubmit(undefined, {
-      email: 'admin@freshvegetables.pk',
-      pass: 'Admin@Sabzi2026!',
-    });
   };
 
   const handleGoogleClick = () => {
@@ -192,44 +165,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               {loading ? 'Signing in…' : 'Sign In'}
             </button>
           </form>
-
-          {/* ── DISCREET STAFF / STORE MANAGER ACCESS ACCORDION ── */}
-          <div className="staff-access-discreet-wrap">
-            <button
-              type="button"
-              className="staff-discreet-toggle-btn"
-              onClick={() => setShowStaffMode((p) => !p)}
-            >
-              <ShieldCheck size={14} />
-              <span>{showStaffMode ? 'Hide Staff Portal' : 'Store Staff / Manager Sign In →'}</span>
-            </button>
-
-            {showStaffMode && (
-              <div className="staff-quick-box animate-slide-down">
-                <p className="staff-quick-text">
-                  Store management credentials required to access the administrative portal.
-                </p>
-                <div className="staff-quick-btn-row">
-                  <button
-                    type="button"
-                    className="staff-action-btn staff-action-btn--fill"
-                    onClick={fillAdminCredentials}
-                  >
-                    Auto-Fill Credentials
-                  </button>
-                  <button
-                    type="button"
-                    className="staff-action-btn staff-action-btn--submit"
-                    onClick={handleQuickAdminLogin}
-                    disabled={loading}
-                  >
-                    <Zap size={13} />
-                    <span>Instant Login</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
 
           <div className="auth-footer-links">
             <p>

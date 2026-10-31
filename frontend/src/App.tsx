@@ -1,9 +1,13 @@
+import { MouseGlow } from './components/MouseGlow';
+import { FloatingWhatsApp } from './components/FloatingWhatsApp';
+import { HomeTrustAndReviews } from './components/HomeTrustAndReviews';
+import { CustomerSupportModal } from './components/CustomerSupportModal';
 import { useEffect, useState, useRef } from 'react';
 import type React from 'react';
 import {
   Leaf, ShoppingBag, Phone, Truck, ShieldCheck,
   CheckCircle, X, Search, Menu, User, ChevronDown,
-  Scale, ArrowRight, MapPin, Clock, MessageCircle, LogIn
+  Scale, ArrowRight, MapPin, Clock, MessageCircle, LogIn, Mail, Headphones, Home
 } from 'lucide-react';
 import { VegetableCard, VegetableItem, CartEntry } from './components/VegetableCard';
 import { Hero3D } from './components/Hero3D';
@@ -79,10 +83,31 @@ const HOW_STEPS: HowStep[] = [
 
 const CART_STORAGE_KEY = 'muzaffargarh_vegetable_cart';
 const LAST_ORDER_STORAGE_KEY = 'muzaffargarh_last_order';
+const VEG_CACHE_KEY = 'muzaffargarh_cached_vegetables';
+const SETTINGS_CACHE_KEY = 'muzaffargarh_cached_settings';
 
 export default function App() {
-  const [settings, setSettings]     = useState<StoreSettings | null>(null);
-  const [vegetables, setVegetables] = useState<VegetableItem[]>([]);
+  const [settings, setSettings] = useState<StoreSettings | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(SETTINGS_CACHE_KEY);
+        if (stored) return JSON.parse(stored);
+      } catch (e) {}
+    }
+    return null;
+  });
+  const [vegetables, setVegetables] = useState<VegetableItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(VEG_CACHE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {}
+    }
+    return [];
+  });
   const [cart, setCart]             = useState<CartEntry[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -107,9 +132,18 @@ export default function App() {
     return null;
   });
 
-  const [loading, setLoading]       = useState(true);
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem(VEG_CACHE_KEY);
+        if (cached && JSON.parse(cached).length > 0) return false;
+      } catch (e) {}
+    }
+    return true;
+  });
   const [toast, setToast]           = useState<string | null>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   /* ── Routing state ──────────────────────────────────────────────
      Supports: '/' | '/vegetables' | '/vegetables/:slug' | '/cart' | '/checkout' | '/order-success' | '/track-order' | '/login' | '/register' | '/account'
@@ -246,8 +280,14 @@ export default function App() {
           fetch('/api/v1/vegetables'),
         ]);
         const [sData, vData] = await Promise.all([sRes.json(), vRes.json()]);
-        if (sData.success) setSettings(sData.data);
-        if (vData.success) setVegetables(vData.data);
+        if (sData.success) {
+          setSettings(sData.data);
+          try { localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(sData.data)); } catch (e) {}
+        }
+        if (vData.success && Array.isArray(vData.data)) {
+          setVegetables(vData.data);
+          try { localStorage.setItem(VEG_CACHE_KEY, JSON.stringify(vData.data)); } catch (e) {}
+        }
       } catch (e) {
         console.error('Failed to load store data:', e);
       } finally {
@@ -317,6 +357,30 @@ export default function App() {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  // Universal Scroll Entrance Observer (WordPress / Framer style)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('IntersectionObserver' in window)) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-revealed');
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.05, rootMargin: '0px 0px -30px 0px' }
+    );
+
+    const elements = document.querySelectorAll('.scroll-reveal-item');
+    elements.forEach((el) => observer.observe(el));
+
+    return () => {
+      elements.forEach((el) => observer.unobserve(el));
+    };
+  }, [currentPath, vegetables.length]);
 
   /* Cart helpers */
   const handleAddToCart = (entry: CartEntry) => {
@@ -409,7 +473,7 @@ export default function App() {
       );
     }
 
-    if (authUser.role !== 'ADMIN') {
+    if (!['OWNER', 'ADMIN', 'MANAGER', 'STAFF', 'EDITOR', 'VIEWER'].includes(authUser.role)) {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '2rem', textAlign: 'center', maxWidth: 520, margin: '0 auto' }}>
           <div style={{ width: 64, height: 64, borderRadius: '50%', backgroundColor: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.25rem' }}>
@@ -459,12 +523,16 @@ export default function App() {
   /* ══════════════════════════════════════════════════════════════════ */
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <MouseGlow />
 
-      {/* ── 1. LIVE MANDI NEWS MARQUEE TICKER ──────────────────── */}
-      <LiveTicker contactPhone={settings?.contactPhone} />
+      {/* ── 1. UNIFIED HEADER GROUP (LIVE TICKER + NAVBAR) ───────── */}
+      <div className="site-sticky-header-group">
+        <LiveTicker
+          contactPhone={settings?.contactPhone && !settings.contactPhone.includes('0300') ? settings.contactPhone : '0342-7883728'}
+        />
 
-      {/* ── 2. NAVBAR ────────────────────────────────────────────── */}
-      <header className="site-header">
+        {/* ── 2. NAVBAR ────────────────────────────────────────────── */}
+        <header className="site-header">
         <div className="container nav-container">
 
           {/* Brand */}
@@ -489,7 +557,8 @@ export default function App() {
                   className={`nav-link${currentPath === '/' ? ' active' : ''}`}
                   onClick={(e) => { e.preventDefault(); navigate('/'); }}
                 >
-                  Home
+                  <Home size={15} />
+                  <span>Home</span>
                 </a>
               </li>
               <li>
@@ -498,7 +567,8 @@ export default function App() {
                   className={`nav-link${currentPath === '/vegetables' ? ' active' : ''}`}
                   onClick={(e) => { e.preventDefault(); navigate('/vegetables'); }}
                 >
-                  Vegetables
+                  <Leaf size={15} />
+                  <span>Vegetables</span>
                 </a>
               </li>
               <li>
@@ -507,8 +577,20 @@ export default function App() {
                   className={`nav-link${currentPath === '/track-order' ? ' active' : ''}`}
                   onClick={(e) => { e.preventDefault(); navigate('/track-order'); }}
                 >
-                  Track Order
+                  <Truck size={15} />
+                  <span>Track Order</span>
                 </a>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  className="nav-link"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit' }}
+                  onClick={() => setIsSupportOpen(true)}
+                >
+                  <Headphones size={15} />
+                  <span>Support</span>
+                </button>
               </li>
             </ul>
           </nav>
@@ -538,27 +620,40 @@ export default function App() {
               style={{
                 borderColor: cartCount > 0 ? 'var(--primary-500)' : undefined,
                 backgroundColor: cartCount > 0 ? 'var(--primary-50)' : undefined,
+                overflow: 'visible',
               }}
               onClick={() => {
                 navigate('/cart');
               }}
               aria-label={`Cart — ${cartCount} items`}
             >
-              <div style={{ position: 'relative' }}>
-                <ShoppingBag size={17} />
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <ShoppingBag size={18} color={cartCount > 0 ? 'var(--primary-700)' : 'currentColor'} />
                 {cartCount > 0 && (
                   <span style={{
-                    position: 'absolute', top: -8, right: -10,
-                    background: 'var(--primary-700)', color: '#fff',
-                    fontSize: '0.65rem', fontWeight: 800,
-                    width: 17, height: 17, borderRadius: '50%',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    position: 'absolute',
+                    top: -8,
+                    right: -9,
+                    backgroundColor: '#059669',
+                    color: '#ffffff',
+                    fontSize: '0.65rem',
+                    fontWeight: 800,
+                    minWidth: '17px',
+                    height: '17px',
+                    borderRadius: '9999px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '0 3px',
+                    border: '2px solid #ffffff',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    lineHeight: 1,
                   }}>
                     {cartCount}
                   </span>
                 )}
               </div>
-              <span className="nav-btn-label">
+              <span className="nav-btn-label" style={{ fontWeight: 700, marginLeft: cartCount > 0 ? '6px' : '0' }}>
                 {cartCount > 0 ? `Rs. ${cartTotal.toLocaleString()}` : 'Cart'}
               </span>
             </button>
@@ -609,7 +704,7 @@ export default function App() {
                       <ShoppingBag size={15} />
                       <span>My Orders</span>
                     </button>
-                    {authUser?.role === 'ADMIN' && (
+                    {['OWNER', 'ADMIN', 'MANAGER', 'STAFF', 'EDITOR'].includes(authUser?.role || '') && (
                       <button
                         type="button"
                         className="nav-dropdown-item"
@@ -716,6 +811,16 @@ export default function App() {
                 </a>
               </li>
               <li>
+                <button
+                  type="button"
+                  className="mobile-nav-link"
+                  style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', font: 'inherit', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                  onClick={() => { setMobileNavOpen(false); setIsSupportOpen(true); }}
+                >
+                  <span>Customer Support</span> <Headphones size={15} />
+                </button>
+              </li>
+              <li>
                 <a
                   href="/cart"
                   className="mobile-nav-link"
@@ -752,7 +857,7 @@ export default function App() {
                       My Orders <ChevronDown size={15} />
                     </a>
                   </li>
-                  {authUser.role === 'ADMIN' && (
+                  {['OWNER', 'ADMIN', 'MANAGER', 'STAFF', 'EDITOR'].includes(authUser.role) && (
                     <li>
                       <a
                         href="/admin"
@@ -813,6 +918,7 @@ export default function App() {
           </div>
         )}
       </header>
+      </div>
 
       {/* ── MAIN CONTENT ─────────────────────────────────────────── */}
       {currentPath === '/login' ? (
@@ -988,7 +1094,7 @@ export default function App() {
             ) : (
               <>
                 <div className="product-grid featured-homepage-grid">
-                  {filteredVeg.slice(0, 4).map(veg => (
+                  {filteredVeg.slice(0, 8).map(veg => (
                     <VegetableCard
                       key={veg.id}
                       vegetable={veg}
@@ -999,7 +1105,7 @@ export default function App() {
                 </div>
 
                 {/* Big View All Catalog CTA */}
-                <div className="homepage-all-catalog-cta">
+                <div className="homepage-all-catalog-cta scroll-reveal-item">
                   <div className="catalog-cta-info">
                     <span className="catalog-cta-badge">Complete Fresh Market</span>
                     <h3 className="catalog-cta-title">Looking for something else?</h3>
@@ -1022,7 +1128,7 @@ export default function App() {
         </section>
 
         {/* ── 5. HOW IT WORKS ──────────────────────────────────── */}
-        <section id="how-it-works" ref={howSectionRef} className="how-it-works-section" aria-label="How it works">
+        <section id="how-it-works" ref={howSectionRef} className="how-it-works-section scroll-reveal-item" aria-label="How it works">
           <div className="container">
             <div className="section-intro" style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
               <span className="section-eyebrow">Aasan Tareeqa</span>
@@ -1057,6 +1163,9 @@ export default function App() {
             </div>
           </div>
         </section>
+
+        {/* ── 5.5 TRUST GUARANTEES, REVIEWS & FAQ ── */}
+        <HomeTrustAndReviews contactPhone={settings?.contactPhone || '03427883728'} />
 
       </main>
       )}
@@ -1154,32 +1263,42 @@ export default function App() {
 
             {/* Contact & Account column */}
             <div>
-              <p className="footer-col-title">Contact & Account</p>
+              <p className="footer-col-title">Contact & Customer Support</p>
               <ul className="footer-links">
                 <li>
                   <a
-                    href={`tel:${settings?.contactPhone || '0300-1234567'}`}
+                    href="tel:03427883728"
                     id="footer-contact-link"
                     className="footer-link"
+                    title="Helpline Call"
                   >
                     <Phone size={14} />
-                    <span>{settings?.contactPhone || '0300-1234567'}</span>
+                    <span>0342-7883728</span>
                   </a>
                 </li>
-                {settings?.whatsappEnabled && settings?.whatsappNumber && (
-                  <li>
-                    <a
-                      href={`https://wa.me/${settings.whatsappNumber.replace(/[^0-9]/g, '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="footer-link"
-                      aria-label="WhatsApp Contact"
-                    >
-                      <MessageCircle size={14} />
-                      <span>WhatsApp</span>
-                    </a>
-                  </li>
-                )}
+                <li>
+                  <a
+                    href="mailto:rehan.techhub0@gmail.com"
+                    id="footer-email-link"
+                    className="footer-link"
+                    title="Customer Support Gmail"
+                  >
+                    <Mail size={14} />
+                    <span>rehan.techhub0@gmail.com</span>
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://wa.me/923427883728?text=Assalam-o-Alaikum%2C%20mujhe%20taaza%20sabzi%20order%20karni%20hai"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="footer-link"
+                    aria-label="WhatsApp Contact"
+                  >
+                    <MessageCircle size={14} />
+                    <span>WhatsApp (0342-7883728)</span>
+                  </a>
+                </li>
                 <li>
                   <a
                     href={authUser ? '/account' : '/login'}
@@ -1221,6 +1340,13 @@ export default function App() {
 
       {/* ── 8. BACK TO TOP (INSTANT SCROLL ARROW) ────────────────── */}
       <BackToTop />
+      <FloatingWhatsApp phone={settings?.whatsappNumber && !settings.whatsappNumber.includes('0300') ? settings.whatsappNumber : '03427883728'} />
+      <CustomerSupportModal
+        isOpen={isSupportOpen}
+        onClose={() => setIsSupportOpen(false)}
+        contactPhone={settings?.contactPhone && !settings.contactPhone.includes('0300') ? settings.contactPhone : '0342-7883728'}
+        supportEmail="rehan.techhub0@gmail.com"
+      />
 
       {/* ── 9. KITCHEN & BUDGET ASSISTANT (AAJ KYA BANAYEIN?) ─────── */}
       <SabziAIWidget onAddToCart={handleAddToCart} vegetables={vegetables} />
