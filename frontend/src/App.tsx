@@ -33,6 +33,7 @@ import { useAuthStore } from './store/authStore';
 interface StoreSettings {
   brandName: string;
   brandTagline: string;
+  logoUrl?: string | null;
   contactPhone: string;
   currency: string;
   whatsappNumber: string;
@@ -450,7 +451,7 @@ export default function App() {
     return matchesSearch && matchesHomeCategory(v, homeCategory);
   });
 
-  const brandName = settings?.brandName || 'Fresh Vegetables Muzaffargarh';
+  const brandName = settings?.brandName || 'Veggie House';
 
   /* ── ADMIN PANEL ROUTE GUARD ──────────────────────────────────────── */
   if (currentPath === '/admin') {
@@ -536,13 +537,23 @@ export default function App() {
         <div className="container nav-container">
 
           {/* Brand */}
-          <a className="nav-brand" onClick={(e) => { e.preventDefault(); navigate('/'); }} href="/" aria-label="Home">
-            <div className="nav-logo-icon">
-              <Leaf size={24} />
-            </div>
-            <div>
-              <p className="nav-brand-title">{brandName}</p>
-              <p className="nav-brand-tagline">
+          <a className="nav-brand" onClick={(e) => { e.preventDefault(); navigate('/'); }} href="/" aria-label="Home" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', textDecoration: 'none' }}>
+            {settings?.logoUrl ? (
+              <img
+                src={settings.logoUrl}
+                alt={brandName}
+                style={{ height: '42px', width: 'auto', maxHeight: '42px', objectFit: 'contain', borderRadius: '8px' }}
+              />
+            ) : (
+              <div className="nav-logo-icon">
+                <Leaf size={24} />
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <p className="nav-brand-title" style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: 'var(--primary-900)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+                {brandName}
+              </p>
+              <p className="nav-brand-tagline" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.2, whiteSpace: 'nowrap' }}>
                 {settings?.brandTagline || 'Farm-to-doorstep delivery'}
               </p>
             </div>
@@ -1177,10 +1188,18 @@ export default function App() {
 
             {/* Brand column */}
             <div className="footer-brand-col">
-              <a href="/" className="footer-brand" onClick={(e) => { e.preventDefault(); navigate('/'); }}>
-                <div className="nav-logo-icon" aria-hidden="true">
-                  <Leaf size={20} />
-                </div>
+              <a href="/" className="footer-brand" onClick={(e) => { e.preventDefault(); navigate('/'); }} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none' }}>
+                {settings?.logoUrl ? (
+                  <img
+                    src={settings.logoUrl}
+                    alt={brandName}
+                    style={{ height: '36px', width: 'auto', maxHeight: '36px', objectFit: 'contain', borderRadius: '6px' }}
+                  />
+                ) : (
+                  <div className="nav-logo-icon" aria-hidden="true">
+                    <Leaf size={20} />
+                  </div>
+                )}
                 <div>
                   <span className="footer-brand-name">{brandName}</span>
                   <p className="footer-brand-tagline">

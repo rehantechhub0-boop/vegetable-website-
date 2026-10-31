@@ -2,7 +2,6 @@ import type React from 'react';
 import { useState } from 'react';
 import { Leaf, AlertCircle, ArrowLeft, Lock, Mail, User, Phone } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { GoogleSignInModal } from '../components/GoogleSignInModal';
 import { GenuineGoogleButton } from '../components/GenuineGoogleButton';
 
 interface RegisterPageProps {
@@ -23,8 +22,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
-
+  
   const setUser = useAuthStore((s) => s.setUser);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -82,12 +80,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
 
   return (
     <main className="auth-page-wrapper">
-      <GoogleSignInModal
-        isOpen={isGoogleModalOpen}
-        onClose={() => setIsGoogleModalOpen(false)}
-        onSuccess={onSuccess}
-      />
-      <div className="container auth-container">
+            <div className="container auth-container">
         <div className="auth-card">
           <button
             type="button"
@@ -117,8 +110,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
           <GenuineGoogleButton
             onSuccess={onSuccess}
             onError={(errMsg) => setError(errMsg)}
-            onOpenFallbackModal={() => setIsGoogleModalOpen(true)}
-          />
+                      />
 
           <div className="auth-divider">
             <span>or register with email</span>

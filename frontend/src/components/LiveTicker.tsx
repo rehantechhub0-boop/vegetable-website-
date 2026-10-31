@@ -5,10 +5,21 @@ interface LiveTickerProps {
   contactPhone?: string;
 }
 
+function formatPhone(p: string): string {
+  const digits = p.replace(/[^0-9]/g, '');
+  if (digits.length === 11 && digits.startsWith('03')) {
+    return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  }
+  if (digits.length === 12 && digits.startsWith('923')) {
+    return `0${digits.slice(2, 5)}-${digits.slice(5)}`;
+  }
+  return p && p.includes('-') ? p : '0342-7883728';
+}
+
 export const LiveTicker: React.FC<LiveTickerProps> = ({
   contactPhone = '0342-7883728',
 }) => {
-  const displayPhone = contactPhone && !contactPhone.includes('0300') ? contactPhone : '0342-7883728';
+  const displayPhone = formatPhone(contactPhone && !contactPhone.includes('0300') ? contactPhone : '0342-7883728');
 
   const tickerItems = [
     {
@@ -97,9 +108,9 @@ export const LiveTicker: React.FC<LiveTickerProps> = ({
           href={`tel:${displayPhone.replace(/[^0-9+]/g, '')}`}
           className="live-ticker-phone"
           title="Direct Call Helpline"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 700, fontSize: '0.82rem' }}
         >
-          <Phone size={12} />
+          <Phone size={13} />
           <span>{displayPhone}</span>
         </a>
       </div>

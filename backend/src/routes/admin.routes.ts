@@ -32,7 +32,7 @@ import {
 } from '../services/admin.service.js';
 import { updateOrderStatus } from '../services/order.service.js';
 
-export function createAdminRouter(prisma: PrismaClient): Router {
+export function createAdminRouter(prisma: PrismaClient, onSettingsChange?: () => void): Router {
   const router = Router();
 
   // Enforce ADMIN role on EVERY route
@@ -469,6 +469,7 @@ export function createAdminRouter(prisma: PrismaClient): Router {
     try {
       const { settings } = req.body;
       const result = await updateAdminSettings(prisma, settings);
+      if (onSettingsChange) onSettingsChange();
       return res.json({ success: true, updated: result.updated, skipped: result.skipped });
     } catch (err: any) {
       return res.status(err.statusCode || 500).json({ success: false, error: err.message || 'Failed to update settings.' });

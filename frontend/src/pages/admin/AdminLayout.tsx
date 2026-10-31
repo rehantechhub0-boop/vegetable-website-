@@ -126,7 +126,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               <Leaf size={20} color="#fff" />
             </div>
             <div className="admin-brand-text">
-              <span className="brand-title">Muzaffargarh</span>
+              <span className="brand-title">Veggie House</span>
               <span className="brand-badge">ADMIN PANEL</span>
             </div>
           </div>

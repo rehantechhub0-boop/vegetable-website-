@@ -2,8 +2,6 @@ import type React from 'react';
 import { useState } from 'react';
 import { Leaf, AlertCircle, ArrowRight, Lock, Mail, ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-
-import { GoogleSignInModal } from '../components/GoogleSignInModal';
 import { GenuineGoogleButton } from '../components/GenuineGoogleButton';
 
 interface LoginPageProps {
@@ -22,7 +20,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [googleNotice, setGoogleNotice] = useState<string | null>(null);
-  const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
 
   const setUser = useAuthStore((s) => s.setUser);
 
@@ -63,19 +60,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     }
   };
 
-  const handleGoogleClick = () => {
-    setError(null);
-    setGoogleNotice(null);
-    setIsGoogleModalOpen(true);
-  };
-
   return (
     <main className="auth-page-wrapper">
-      <GoogleSignInModal
-        isOpen={isGoogleModalOpen}
-        onClose={() => setIsGoogleModalOpen(false)}
-        onSuccess={onSuccess}
-      />
       <div className="container auth-container">
         <div className="auth-card">
           <button
@@ -113,7 +99,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           <GenuineGoogleButton
             onSuccess={onSuccess}
             onError={(errMsg) => setError(errMsg)}
-            onOpenFallbackModal={handleGoogleClick}
           />
 
           <div className="auth-divider">

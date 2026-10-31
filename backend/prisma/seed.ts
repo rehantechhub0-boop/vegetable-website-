@@ -8,7 +8,7 @@ async function main() {
 
   // 1. Settings (Brand Name configurable as required)
   const defaultSettings = [
-    { key: 'brand_name', value: 'Fresh Vegetables Muzaffargarh', group: 'general', description: 'Store brand name' },
+    { key: 'brand_name', value: 'Veggie House', group: 'general', description: 'Store brand name' },
     { key: 'brand_tagline', value: 'Fresh, hand-picked vegetables delivered directly to your doorstep.', group: 'general', description: 'Tagline' },
     { key: 'contact_phone', value: '0342-7883728', group: 'general', description: 'Store customer support phone' },
     { key: 'whatsapp_number', value: '923427883728', group: 'whatsapp', description: 'WhatsApp business phone' },

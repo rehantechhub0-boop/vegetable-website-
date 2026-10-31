@@ -142,7 +142,7 @@ const staticUploadsDir = process.env.VERCEL ? path.join('/tmp', 'uploads') : 'up
 app.use('/uploads', express.static(staticUploadsDir));
 
 // Admin Panel — all routes require ADMIN role (enforced inside the router)
-app.use('/api/v1/admin', createAdminRouter(prisma));
+app.use('/api/v1/admin', createAdminRouter(prisma, invalidateSettingsCache));
 
 // Health Check
 app.get('/api/health', (req: Request, res: Response) => {
@@ -195,8 +195,9 @@ app.get('/api/v1/settings', async (req: Request, res: Response, next: NextFuncti
     const responsePayload = {
       success: true,
       data: {
-        brandName: configMap['brand_name'] || 'Fresh Vegetables Muzaffargarh',
+        brandName: configMap['brand_name'] || 'Veggie House',
         brandTagline: configMap['brand_tagline'] || 'Farm-fresh vegetables delivered to your doorstep.',
+        logoUrl: configMap['logo_url'] || null,
         contactPhone: configMap['contact_phone'] || '03427883728',
         currency: configMap['currency_symbol'] || 'Rs.',
         whatsappNumber: configMap['whatsapp_number'] || '923427883728',
