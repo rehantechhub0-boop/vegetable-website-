@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import path from 'path';
 import { getPrismaClient } from './db/prisma.js';
 import { validateAndCalculateWeight } from './services/weight.service.js';
 import { createOrder, updateOrderStatus, OrderValidationError, IdempotencyConflictError, StalePriceError } from './services/order.service.js';
@@ -113,7 +114,8 @@ export const authRateLimiter = rateLimit({
 });
 
 app.use(express.json({ limit: '1mb' }));
-app.use('/uploads', express.static('uploads'));
+const staticUploadsDir = process.env.VERCEL ? path.join('/tmp', 'uploads') : 'uploads';
+app.use('/uploads', express.static(staticUploadsDir));
 
 // Admin Panel — all routes require ADMIN role (enforced inside the router)
 app.use('/api/v1/admin', createAdminRouter(prisma));
