@@ -80,6 +80,8 @@ app.use(cors({
       origin.includes('127.0.0.1') ||
       origin.endsWith('.workers.dev') ||
       origin.endsWith('.pages.dev') ||
+      origin.endsWith('.hostingersite.com') ||
+      origin.includes('hostingersite.com') ||
       origin.endsWith('.vercel.app') ||
       configuredOrigins.includes(origin) ||
       configuredOrigins.includes('*')
