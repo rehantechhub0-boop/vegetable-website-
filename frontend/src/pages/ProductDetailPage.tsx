@@ -40,7 +40,7 @@ export function ProductDetailPage({
   /* ── Gallery state ─────────────────────────────────────────────── */
   const allImages: string[] = vegetable
     ? (vegetable.images?.length
-        ? vegetable.images.map(i => i.url)
+        ? vegetable.images.map(i => (i.url.startsWith('http') ? i.url : `${(import.meta.env.VITE_API_URL || '').replace(/\/+$/, '')}${i.url}`))
         : ['https://images.unsplash.com/photo-1542838132-92c53300491e?w=1000&auto=format&fit=crop&q=80'])
     : [];
 

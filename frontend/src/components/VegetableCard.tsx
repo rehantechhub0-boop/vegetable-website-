@@ -58,10 +58,12 @@ export const VegetableCard: React.FC<VegetableCardProps> = ({
   const originalPrice = vegetable.isOffer && vegetable.offerPrice ? vegetable.pricePerKg : null;
   const savingsPerKg = originalPrice ? originalPrice - effectivePricePerKg : 0;
 
-  const primaryImg =
+  const rawImg =
     vegetable.images?.find((i) => i.isPrimary)?.url ??
     vegetable.images?.[0]?.url ??
     'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800&auto=format&fit=crop&q=80';
+  const apiBase = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+  const primaryImg = rawImg.startsWith('http') || !apiBase ? rawImg : `${apiBase}${rawImg}`;
 
   let weightInKg = 1.0;
   let weightDisplay = '1kg';
