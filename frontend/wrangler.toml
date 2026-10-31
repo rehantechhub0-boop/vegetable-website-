@@ -1,5 +1,6 @@
 name = "vegetable-website"
 compatibility_date = "2024-09-23"
+workers_dev = true
 
 [assets]
 directory = "./dist"
