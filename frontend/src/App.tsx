@@ -1,11 +1,17 @@
 import { useEffect, useState, useRef } from 'react';
 import type React from 'react';
 import {
-  Leaf, ShoppingBag, Phone, Sparkles, Truck, ShieldCheck,
+  Leaf, ShoppingBag, Phone, Truck, ShieldCheck,
   CheckCircle, X, Search, Menu, User, ChevronDown,
   Scale, ArrowRight, MapPin, Clock, MessageCircle, LogIn
 } from 'lucide-react';
 import { VegetableCard, VegetableItem, CartEntry } from './components/VegetableCard';
+import { Hero3D } from './components/Hero3D';
+import { LiveTicker } from './components/LiveTicker';
+import { MandiNewsAndDeals } from './components/MandiNewsAndDeals';
+import { AboutAndServiceSection } from './components/AboutAndServiceSection';
+import { SabziAIWidget } from './components/SabziAIWidget';
+import { BackToTop } from './components/BackToTop';
 import { VegetablesPage } from './pages/VegetablesPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { CartPage } from './pages/CartPage';
@@ -14,6 +20,8 @@ import { OrderSuccessPage } from './pages/OrderSuccessPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { AccountPage } from './pages/AccountPage';
+import { TrackOrderPage } from './pages/TrackOrderPage';
+import { AdminLayout, AdminSection } from './pages/admin/AdminLayout';
 import { useAuthStore } from './store/authStore';
 
 /* ────────────────────────────────────────────────────────────────── */
@@ -67,29 +75,6 @@ const HOW_STEPS: HowStep[] = [
   },
 ];
 
-const BENEFITS: { icon: React.ReactNode; title: string; desc: string }[] = [
-  {
-    icon: <Leaf size={18} />,
-    title: 'Fresh Vegetables',
-    desc: 'Sourced daily and prepared fresh for your home cooking needs.',
-  },
-  {
-    icon: <Scale size={18} />,
-    title: 'Buy Exactly by Weight',
-    desc: 'Choose fixed weights from 250g to 10kg, or enter custom bulk quantities.',
-  },
-  {
-    icon: <Truck size={18} />,
-    title: 'Local Delivery',
-    desc: 'Direct doorstep delivery across Muzaffargarh addresses.',
-  },
-  {
-    icon: <ShieldCheck size={18} />,
-    title: 'Simple Ordering',
-    desc: 'Straightforward cart review with payment on delivery.',
-  },
-];
-
 /* ────────────────────────────────────────────────────────────────── */
 
 const CART_STORAGE_KEY = 'muzaffargarh_vegetable_cart';
@@ -127,7 +112,7 @@ export default function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   /* ── Routing state ──────────────────────────────────────────────
-     Supports: '/' | '/vegetables' | '/vegetables/:slug' | '/cart' | '/checkout' | '/order-success' | '/login' | '/register' | '/account'
+     Supports: '/' | '/vegetables' | '/vegetables/:slug' | '/cart' | '/checkout' | '/order-success' | '/track-order' | '/login' | '/register' | '/account'
   ─────────────────────────────────────────────────────────────── */
   const parseRoute = (pathname: string): { path: string; slug: string | null; orderNumber: string | null } => {
     const parts = pathname.split('/').filter(Boolean);
@@ -138,6 +123,14 @@ export default function App() {
     if (parts[0] === 'cart') return { path: '/cart', slug: null, orderNumber: null };
     if (parts[0] === 'checkout') return { path: '/checkout', slug: null, orderNumber: null };
     if (parts[0] === 'order-success') return { path: '/order-success', slug: null, orderNumber: null };
+    if (parts[0] === 'track-order') {
+      const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+      return {
+        path: '/track-order',
+        slug: searchParams.get('uuid') || null,
+        orderNumber: searchParams.get('orderNumber') || parts[1] || null,
+      };
+    }
     if (parts[0] === 'login') return { path: '/login', slug: null, orderNumber: null };
     if (parts[0] === 'register') return { path: '/register', slug: null, orderNumber: null };
     if (parts[0] === 'account') {
@@ -145,6 +138,10 @@ export default function App() {
         return { path: '/account/orders/:orderNumber', slug: null, orderNumber: parts[2] };
       }
       return { path: '/account', slug: null, orderNumber: null };
+    }
+    if (parts[0] === 'admin') {
+      const section = (parts[1] || 'dashboard') as AdminSection;
+      return { path: '/admin', slug: section, orderNumber: parts[2] || null };
     }
     return { path: '/', slug: null, orderNumber: null };
   };
@@ -166,16 +163,29 @@ export default function App() {
   }, [cart]);
 
   const shopSectionRef  = useRef<HTMLElement>(null);
-  const heroRef         = useRef<HTMLElement>(null);   // hero section
   const heroImgRef      = useRef<HTMLDivElement>(null); // image wrapper — parallaxes independently
   const howSectionRef   = useRef<HTMLElement>(null);   // How It Works section
   const ctaSectionRef   = useRef<HTMLElement>(null);   // Delivery CTA section
 
-  const navigate = (path: string) => {
-    if (window.location.pathname !== path) {
-      window.history.pushState({}, '', path);
+  const navigate = (path: string, params?: { orderNumber?: string; uuid?: string }) => {
+    let targetUrl = path;
+    if (params) {
+      const sp = new URLSearchParams();
+      if (params.orderNumber) sp.set('orderNumber', params.orderNumber);
+      if (params.uuid) sp.set('uuid', params.uuid);
+      const q = sp.toString();
+      if (q) targetUrl = `${path}?${q}`;
     }
-    setCurrentRoute(parseRoute(path));
+
+    if (typeof window !== 'undefined') {
+      window.history.pushState({}, '', targetUrl);
+    }
+
+    const route = parseRoute(path);
+    if (params?.orderNumber) route.orderNumber = params.orderNumber;
+    if (params?.uuid) route.slug = params.uuid;
+
+    setCurrentRoute(route);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -194,8 +204,24 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // Secret Admin Shortcut: Ctrl + Shift + A or Ctrl + Alt + A
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        (e.ctrlKey && e.altKey && e.key.toLowerCase() === 'a') ||
+        (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a')
+      ) {
+        e.preventDefault();
+        navigate('/admin');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   /* Auth state */
   const authUser = useAuthStore((s) => s.user);
+  const authLoading = useAuthStore((s) => s.loading);
   const checkAuth = useAuthStore((s) => s.checkAuth);
   const logout = useAuthStore((s) => s.logout);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -339,34 +365,103 @@ export default function App() {
   const cartCount  = cart.reduce((s, c) => s + c.quantity, 0);
   const cartTotal  = cart.reduce((s, c) => s + c.itemTotal, 0);
 
+  const homeCategory = 'all';
+
+  const matchesHomeCategory = (veg: VegetableItem, cat: string): boolean => {
+    if (cat === 'all') return true;
+    if (cat === 'offers') return veg.isOffer;
+    const lower = (veg.name + ' ' + veg.slug).toLowerCase();
+    if (cat === 'staples') return lower.includes('aloo') || lower.includes('pyaz') || lower.includes('tamatar') || lower.includes('potato') || lower.includes('onion') || lower.includes('tomato');
+    if (cat === 'greens') return lower.includes('palak') || lower.includes('spinach') || lower.includes('dhaniya') || lower.includes('pudina') || lower.includes('mint') || lower.includes('coriander');
+    if (cat === 'salad') return lower.includes('kheera') || lower.includes('cucumber') || lower.includes('mooli') || lower.includes('gajar') || lower.includes('carrot') || lower.includes('radish') || lower.includes('chukandar') || lower.includes('lemon') || lower.includes('nimbu');
+    if (cat === 'spices') return lower.includes('mirch') || lower.includes('adrak') || lower.includes('lehsan') || lower.includes('chilli') || lower.includes('ginger') || lower.includes('garlic');
+    return true;
+  };
+
   /* Filtered vegetables */
-  const filteredVeg = vegetables.filter(v =>
-    v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    v.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredVeg = vegetables.filter(v => {
+    const matchesSearch =
+      v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      v.description.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSearch && matchesHomeCategory(v, homeCategory);
+  });
 
   const brandName = settings?.brandName || 'Fresh Vegetables Muzaffargarh';
+
+  /* ── ADMIN PANEL ROUTE GUARD ──────────────────────────────────────── */
+  if (currentPath === '/admin') {
+    if (authLoading) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: '1rem', color: 'var(--text-muted)' }}>
+          <Clock size={32} className="spin-icon" color="var(--primary-600)" />
+          <p>Verifying administrative credentials...</p>
+        </div>
+      );
+    }
+
+    if (!authUser) {
+      return (
+        <LoginPage
+          onNavigateHome={() => navigate('/')}
+          onNavigateRegister={() => navigate('/register')}
+          onSuccess={() => navigate('/admin')}
+        />
+      );
+    }
+
+    if (authUser.role !== 'ADMIN') {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '2rem', textAlign: 'center', maxWidth: 520, margin: '0 auto' }}>
+          <div style={{ width: 64, height: 64, borderRadius: '50%', backgroundColor: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.25rem' }}>
+            <ShieldCheck size={32} />
+          </div>
+          <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.65rem', fontWeight: 700, color: 'var(--text-headline)', marginBottom: '0.5rem' }}>
+            Access Denied (403 Forbidden)
+          </h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: '1.5rem' }}>
+            Administrator credentials are required to access this portal. Your signed-in account is a customer account.
+          </p>
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="admin-btn admin-btn--primary"
+            >
+              Back to Store
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                await logout();
+                navigate('/login');
+              }}
+              className="admin-btn admin-btn--secondary"
+            >
+              Sign in as Admin
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <AdminLayout
+        currentSection={(currentRoute.slug as AdminSection) || 'dashboard'}
+        subParam={currentRoute.orderNumber}
+        onNavigateSection={(sec, param) => {
+          navigate(`/admin/${sec}`, param ? { orderNumber: param } : undefined);
+        }}
+        onNavigateStore={() => navigate('/')}
+      />
+    );
+  }
 
   /* ══════════════════════════════════════════════════════════════════ */
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
 
-      {/* ── 1. ANNOUNCEMENT BAR ─────────────────────────────────── */}
-      <aside className="announcement-bar" aria-label="Store announcement">
-        <div className="container announcement-inner">
-          <span className="announcement-text">
-            <Sparkles size={14} color="var(--accent-500)" />
-            Fresh vegetables&nbsp;·&nbsp;Local delivery&nbsp;·&nbsp;Simple ordering
-          </span>
-          <a
-            href={`tel:${settings?.contactPhone || ''}`}
-            className="announcement-contact"
-          >
-            <Phone size={13} />
-            {settings?.contactPhone || '0300-1234567'}
-          </a>
-        </div>
-      </aside>
+      {/* ── 1. LIVE MANDI NEWS MARQUEE TICKER ──────────────────── */}
+      <LiveTicker contactPhone={settings?.contactPhone} />
 
       {/* ── 2. NAVBAR ────────────────────────────────────────────── */}
       <header className="site-header">
@@ -404,6 +499,15 @@ export default function App() {
                   onClick={(e) => { e.preventDefault(); navigate('/vegetables'); }}
                 >
                   Vegetables
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/track-order"
+                  className={`nav-link${currentPath === '/track-order' ? ' active' : ''}`}
+                  onClick={(e) => { e.preventDefault(); navigate('/track-order'); }}
+                >
+                  Track Order
                 </a>
               </li>
             </ul>
@@ -454,7 +558,9 @@ export default function App() {
                   </span>
                 )}
               </div>
-              {cartCount > 0 ? `Rs. ${cartTotal.toLocaleString()}` : 'Cart'}
+              <span className="nav-btn-label">
+                {cartCount > 0 ? `Rs. ${cartTotal.toLocaleString()}` : 'Cart'}
+              </span>
             </button>
 
             {authUser ? (
@@ -503,6 +609,21 @@ export default function App() {
                       <ShoppingBag size={15} />
                       <span>My Orders</span>
                     </button>
+                    {authUser?.role === 'ADMIN' && (
+                      <button
+                        type="button"
+                        className="nav-dropdown-item"
+                        style={{ color: 'var(--primary-700)', fontWeight: 600 }}
+                        role="menuitem"
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          navigate('/admin');
+                        }}
+                      >
+                        <ShieldCheck size={15} />
+                        <span>Admin Panel</span>
+                      </button>
+                    )}
                     <div className="nav-dropdown-divider" />
                     <button
                       type="button"
@@ -528,7 +649,7 @@ export default function App() {
                 onClick={() => navigate('/login')}
               >
                 <LogIn size={17} />
-                <span>Login</span>
+                <span className="nav-btn-label">Login</span>
               </button>
             )}
 
@@ -587,6 +708,15 @@ export default function App() {
               </li>
               <li>
                 <a
+                  href="/track-order"
+                  className="mobile-nav-link"
+                  onClick={(e) => { e.preventDefault(); setMobileNavOpen(false); navigate('/track-order'); }}
+                >
+                  Track Order <ChevronDown size={15} />
+                </a>
+              </li>
+              <li>
+                <a
                   href="/cart"
                   className="mobile-nav-link"
                   onClick={(e) => { e.preventDefault(); setMobileNavOpen(false); navigate('/cart'); }}
@@ -622,6 +752,22 @@ export default function App() {
                       My Orders <ChevronDown size={15} />
                     </a>
                   </li>
+                  {authUser.role === 'ADMIN' && (
+                    <li>
+                      <a
+                        href="/admin"
+                        className="mobile-nav-link"
+                        style={{ color: 'var(--primary-700)', fontWeight: 700 }}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setMobileNavOpen(false);
+                          navigate('/admin');
+                        }}
+                      >
+                        Admin Panel <ChevronDown size={15} />
+                      </a>
+                    </li>
+                  )}
                   <li>
                     <button
                       type="button"
@@ -686,6 +832,7 @@ export default function App() {
           <AccountPage
             onNavigateShop={() => navigate('/vegetables')}
             onNavigateHome={() => navigate('/')}
+            onNavigateTrackOrder={(orderNumber) => navigate('/track-order', { orderNumber })}
             activeOrderNumber={currentRoute.orderNumber}
           />
         ) : (
@@ -741,10 +888,17 @@ export default function App() {
         <OrderSuccessPage
           order={confirmedOrder}
           onNavigateShop={() => navigate('/vegetables')}
-          onNavigateTracking={(orderNumber) => {
-            setToast(`Order ${orderNumber} is confirmed! Tracking system is coming in the next update.`);
-            setTimeout(() => setToast(null), 4000);
+          onNavigateTracking={(orderNumber, uuid) => {
+            navigate('/track-order', { orderNumber, uuid });
           }}
+        />
+      ) : currentPath === '/track-order' ? (
+        <TrackOrderPage
+          initialOrderNumber={currentRoute.orderNumber}
+          initialUuid={currentRoute.slug}
+          onNavigateShop={() => navigate('/vegetables')}
+          onNavigateHome={() => navigate('/')}
+          onNavigateAccount={() => navigate('/account')}
         />
       ) : currentPath === '/vegetables/:slug' && currentRoute.slug ? (
         <ProductDetailPage
@@ -769,122 +923,33 @@ export default function App() {
       ) : (
         <main>
 
-        {/* ── 3. HERO ──────────────────────────────────────────── */}
-        <section id="home" ref={heroRef} className="hero-section" aria-label="Hero">
+        {/* ── 3. HERO (3D MOUSE TILT & FARM-TO-TABLE SCROLL FRAMES) ── */}
+        <Hero3D
+          vegetableCount={vegetables.length}
+          onShopClick={() => navigate('/vegetables')}
+          onPricesClick={() => navigate('/vegetables')}
+        />
 
-          {/* Decorative background blobs — pure CSS, no JS */}
-          <div className="hero-bg-blob hero-bg-blob--1" aria-hidden="true" />
-          <div className="hero-bg-blob hero-bg-blob--2" aria-hidden="true" />
+        {/* ── 4. TODAY'S MANDI NEWS & FLASH SALES ────────────────── */}
+        <MandiNewsAndDeals
+          vegetables={vegetables}
+          onNavigateVegetables={() => navigate('/vegetables')}
+          onAddToCart={handleAddToCart}
+        />
 
-          <div className="container hero-grid">
+        {/* ── 5. ABOUT US & OUR SERVICE (HUM KAUN HAIN) ────────────── */}
+        <AboutAndServiceSection
+          contactPhone={settings?.contactPhone}
+          whatsappNumber={settings?.whatsappNumber}
+          onNavigateVegetables={() => navigate('/vegetables')}
+        />
 
-            {/* ── LEFT: Copy ─────────────────────────────────── */}
-            <div className="hero-copy">
-
-              {/* Eyebrow label */}
-              <div className="hero-eyebrow">
-                <Leaf size={13} />
-                <span>Muzaffargarh Fresh Vegetable Delivery</span>
-              </div>
-
-              {/* Main headline */}
-              <h1 className="hero-headline">
-                Fresh Vegetables,<br />
-                <span className="hero-headline-accent">Delivered</span> to<br />
-                Your Doorstep
-              </h1>
-
-              {/* Supporting copy */}
-              <p className="hero-subtext">
-                Choose any vegetable by weight — 250g up to bulk quantities.
-                Place your order and we deliver fresh to your home in Muzaffargarh.
-              </p>
-
-              {/* CTAs */}
-              <div className="hero-actions">
-                <button
-                  type="button"
-                  id="hero-cta-primary"
-                  className="hero-btn hero-btn--primary"
-                  onClick={() => navigate('/vegetables')}
-                >
-                  Shop Vegetables <ArrowRight size={16} />
-                </button>
-                <button
-                  type="button"
-                  id="hero-cta-secondary"
-                  className="hero-btn hero-btn--secondary"
-                  onClick={() => navigate('/vegetables')}
-                >
-                  See Today's Prices
-                </button>
-              </div>
-
-              {/* Trust indicators */}
-              <ul className="hero-trust-list" aria-label="Why order with us">
-                <li className="hero-trust-item">
-                  <CheckCircle size={15} className="hero-trust-icon" />
-                  Cash on Delivery
-                </li>
-                <li className="hero-trust-item">
-                  <Truck size={15} className="hero-trust-icon" />
-                  Local Delivery
-                </li>
-                <li className="hero-trust-item">
-                  <Scale size={15} className="hero-trust-icon" />
-                  Buy by Weight
-                </li>
-              </ul>
-
-            </div>
-
-            {/* ── RIGHT: Visual ──────────────────────────────── */}
-            <div className="hero-visual">
-
-              {/* Image wrapper — this element is directly parallaxed via JS */}
-              <div
-                ref={heroImgRef}
-                className="hero-img-frame"
-                style={{ transform: 'translateY(var(--hero-img-offset, 0px))' }}
-              >
-                <img
-                  src="https://images.unsplash.com/photo-1542838132-92c53300491e?w=1000&auto=format&fit=crop&q=85"
-                  alt="A vibrant selection of fresh vegetables"
-                  className="hero-img"
-                  width="1000"
-                  height="700"
-                  loading="eager"
-                  fetchPriority="high"
-                />
-                {/* Subtle green overlay at the bottom to blend into section bg */}
-                <div className="hero-img-scrim" aria-hidden="true" />
-              </div>
-
-              {/* Floating info card — only shown on desktop */}
-              <div className="hero-info-card" aria-hidden="true">
-                <div className="hero-info-card__line">
-                  <span className="hero-info-card__label">Available today</span>
-                  <span className="hero-info-card__value">
-                    {vegetables.length > 0 ? `${vegetables.length} varieties` : 'Fresh vegetables'}
-                  </span>
-                </div>
-                <div className="hero-info-card__divider" />
-                <div className="hero-info-card__line">
-                  <MapPin size={13} style={{ color: 'var(--primary-600)', flexShrink: 0 }} />
-                  <span className="hero-info-card__value">Muzaffargarh delivery</span>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </section>
-
-        {/* ── 4. FRESH VEGETABLES ──────────────────────────────── */}
+        {/* ── 6. TODAY'S FEATURED VEGETABLES (CURATED 4 PICKS) ─────── */}
         <section
           id="vegetables"
           ref={shopSectionRef}
-          style={{ padding: '4rem 0' }}
-          aria-label="Vegetable catalog"
+          style={{ padding: '3.5rem 0 4.5rem' }}
+          aria-label="Today's Featured Vegetables"
         >
           <div className="container">
             <div style={{
@@ -893,49 +958,65 @@ export default function App() {
               marginBottom: '2rem',
             }}>
               <div className="section-intro" style={{ marginBottom: 0 }}>
-                <span className="section-eyebrow">Daily Fresh</span>
-                <h2 className="section-title">Fresh Vegetables</h2>
+                <span className="section-eyebrow">Hand-Picked Daily</span>
+                <h2 className="section-title">Today's Featured Vegetables</h2>
                 <p className="section-subtitle">
-                  Select your weight — 250g to 10kg fixed, or custom bulk orders above 10kg.
-                  {searchQuery && ` Showing results for "${searchQuery}".`}
+                  Subah ki taaza tareen seasonal sabziyan — 250g se 10kg tak certified digital wazan ke sath.
                 </p>
               </div>
 
-              {/* Trust badges & View All link */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <Truck size={15} color="var(--primary-600)" /> Fast Delivery
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <ShieldCheck size={15} color="var(--primary-600)" /> COD Available
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  id="section-view-all-btn"
-                  onClick={() => navigate('/vegetables')}
-                  className="view-all-veg-btn"
-                >
-                  View All Vegetables ({vegetables.length}) <ArrowRight size={15} />
-                </button>
-              </div>
+              {/* View All link */}
+              <button
+                type="button"
+                id="section-view-all-btn"
+                onClick={() => navigate('/vegetables')}
+                className="view-all-veg-btn"
+              >
+                <span>Browse All Vegetables ({vegetables.length})</span>
+                <ArrowRight size={16} />
+              </button>
             </div>
 
             {loading ? (
-              <div style={{ textAlign: 'center', padding: '4rem 0', color: 'var(--text-muted)' }}>
+              <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-muted)' }}>
                 Loading fresh vegetables…
               </div>
             ) : filteredVeg.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '4rem 0', color: 'var(--text-muted)' }}>
-                No vegetables found for "{searchQuery}". Try a different search.
+              <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--text-muted)' }}>
+                No vegetables found. Please check back shortly.
               </div>
             ) : (
-              <div className="product-grid">
-                {filteredVeg.map(veg => (
-                  <VegetableCard key={veg.id} vegetable={veg} onAddToCart={handleAddToCart} onNavigateToProduct={() => navigateToProduct(veg.slug)} />
-                ))}
-              </div>
+              <>
+                <div className="product-grid featured-homepage-grid">
+                  {filteredVeg.slice(0, 4).map(veg => (
+                    <VegetableCard
+                      key={veg.id}
+                      vegetable={veg}
+                      onAddToCart={handleAddToCart}
+                      onNavigateToProduct={() => navigateToProduct(veg.slug)}
+                    />
+                  ))}
+                </div>
+
+                {/* Big View All Catalog CTA */}
+                <div className="homepage-all-catalog-cta">
+                  <div className="catalog-cta-info">
+                    <span className="catalog-cta-badge">Complete Fresh Market</span>
+                    <h3 className="catalog-cta-title">Looking for something else?</h3>
+                    <p className="catalog-cta-desc">
+                      Explore our full inventory of {vegetables.length} fresh vegetables, daily herbs, aromatics, and salad produce.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary catalog-cta-btn"
+                    onClick={() => navigate('/vegetables')}
+                  >
+                    <span>Open Full Vegetables Page</span>
+                    <ArrowRight size={17} />
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </section>
@@ -944,21 +1025,17 @@ export default function App() {
         <section id="how-it-works" ref={howSectionRef} className="how-it-works-section" aria-label="How it works">
           <div className="container">
             <div className="section-intro" style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-              <span className="section-eyebrow">Simple Ordering</span>
-              <h2 className="section-title">How It Works</h2>
+              <span className="section-eyebrow">Aasan Tareeqa</span>
+              <h2 className="section-title">Kaise Order Karein?</h2>
               <p className="section-subtitle" style={{ margin: '0.5rem auto 0', textAlign: 'center' }}>
-                Order fresh vegetables in four simple steps
+                Sirf 4 aasan marahil mein taaza sabzi aapke dastarkhwan par
               </p>
             </div>
             <div className="steps-grid">
-              {HOW_STEPS.map((step, index) => (
+              {HOW_STEPS.map((step) => (
                 <div
                   key={step.n}
                   className="step-card"
-                  style={{
-                    transform: `translateY(var(--step-y-${index}, 0px))`,
-                    opacity: `var(--step-op-${index}, 1)`,
-                  }}
                 >
                   <div className="step-header">
                     <span className="step-number">{step.n}</span>
@@ -977,80 +1054,6 @@ export default function App() {
                   )}
                 </div>
               ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ── 6. WHY CHOOSE US ─────────────────────────────────── */}
-        <section id="why-choose-us" className="why-choose-us-section" aria-label="Why choose us">
-          <div className="container">
-            <div className="section-intro" style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-              <span className="section-eyebrow">Our Service</span>
-              <h2 className="section-title">Why Choose Us</h2>
-            </div>
-            <div className="benefits-grid">
-              {BENEFITS.map(b => (
-                <div key={b.title} className="benefit-card">
-                  <div className="benefit-icon-wrap" aria-hidden="true">{b.icon}</div>
-                  <h3 className="benefit-title">{b.title}</h3>
-                  <p className="benefit-desc">{b.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ── 7. DELIVERY CTA ──────────────────────────────────── */}
-        <section id="delivery-cta" ref={ctaSectionRef} className="delivery-cta-section" aria-label="Call to action">
-          <div className="container">
-            <div className="delivery-cta-banner">
-              {/* Subtle vegetable leaf motif background treatment */}
-              <div
-                className="delivery-cta-bg-motif"
-                aria-hidden="true"
-                style={{
-                  transform: 'translateY(var(--cta-offset, 0px))',
-                }}
-              >
-                <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M100 15C100 15 145 45 160 95C175 145 145 185 100 185C55 185 25 145 40 95C55 45 100 15 100 15Z"
-                    stroke="#ffffff"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    fill="#ffffff"
-                    fillOpacity="0.08"
-                  />
-                  <path
-                    d="M100 30V170M100 70L135 50M100 100L145 85M100 130L135 120M100 70L65 50M100 100L55 85M100 130L65 120"
-                    stroke="#ffffff"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </div>
-
-              <div className="delivery-cta-content">
-                <span className="delivery-cta-eyebrow">
-                  <Leaf size={14} style={{ display: 'inline', marginRight: 4 }} />
-                  Daily Delivery Service
-                </span>
-                <h2 className="delivery-cta-title">
-                  Fresh vegetables are just a few clicks away.
-                </h2>
-                <p className="delivery-cta-subtext">
-                  Choose your vegetables, select the quantity you need, and place your order.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                id="delivery-cta-btn"
-                className="delivery-cta-btn"
-                onClick={() => navigate('/vegetables')}
-              >
-                Shop Vegetables <ArrowRight size={16} style={{ display: 'inline', marginLeft: 4 }} />
-              </button>
             </div>
           </div>
         </section>
@@ -1195,13 +1198,32 @@ export default function App() {
 
           {/* Bottom bar */}
           <div className="footer-bottom">
-            <span>© {new Date().getFullYear()} {brandName}. All rights reserved.</span>
+            <span>
+              © {new Date().getFullYear()} {brandName}. All rights reserved. ·{' '}
+              <a
+                href="/admin"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate('/admin');
+                }}
+                className="footer-discreet-staff-link"
+                title="Store Staff Portal (or press Ctrl + Shift + A)"
+              >
+                Staff Portal
+              </a>
+            </span>
             <span className="footer-bottom-location">
               <MapPin size={13} /> Muzaffargarh, Punjab, Pakistan
             </span>
           </div>
         </div>
       </footer>
+
+      {/* ── 8. BACK TO TOP (INSTANT SCROLL ARROW) ────────────────── */}
+      <BackToTop />
+
+      {/* ── 9. KITCHEN & BUDGET ASSISTANT (AAJ KYA BANAYEIN?) ─────── */}
+      <SabziAIWidget onAddToCart={handleAddToCart} vegetables={vegetables} />
 
       {/* ── FLOATING TOAST ────────────────────────────────────────── */}
       {toast && (

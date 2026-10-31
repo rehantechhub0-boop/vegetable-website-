@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
 export const createOrderSchema = z.object({
+  idempotencyKey: z
+    .string({ required_error: 'Idempotency key is required' })
+    .trim()
+    .min(8, { message: 'Idempotency key must be at least 8 characters long' })
+    .max(128, { message: 'Idempotency key must not exceed 128 characters' }),
   customer: z.object({
     name: z.string().trim().min(2, { message: 'Customer name must be at least 2 characters long' }),
     phone: z.string().trim().min(7, { message: 'Valid phone number is required' }),
@@ -19,6 +24,7 @@ export const createOrderSchema = z.object({
       weightInKg: z.number().positive({ message: 'weightInKg must be a positive number' }),
       weightDisplay: z.string().trim().optional(),
       quantity: z.number().int({ message: 'quantity must be an integer' }).min(1, { message: 'quantity must be at least 1' }),
+      expectedPricePerKg: z.number().positive({ message: 'expectedPricePerKg must be a positive number' }).optional().nullable(),
     })
   ).min(1, { message: 'Cart must contain at least one item' }),
 });

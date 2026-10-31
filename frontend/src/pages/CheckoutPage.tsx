@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft,
   Truck,
@@ -7,6 +7,7 @@ import {
   AlertCircle,
   Clock,
   Sparkles,
+  RefreshCw,
 } from 'lucide-react';
 import type { CartEntry } from '../components/VegetableCard';
 
@@ -57,14 +58,28 @@ interface CheckoutPageProps {
   onNavigateCart: () => void;
 }
 
+export interface PriceChangeItem {
+  vegetableId: string;
+  vegetableName: string;
+  submittedPricePerKg: number;
+  currentPricePerKg: number;
+}
+
 import { useAuthStore } from '../store/authStore';
+
+/** Generate a cryptographically random idempotency key. */
+function generateIdempotencyKey(): string {
+  const arr = new Uint8Array(18);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, (b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   cart,
   onOrderSuccess,
   onNavigateCart,
 }) => {
-  const { user, token } = useAuthStore();
+  const { user } = useAuthStore();
 
   // Form State (Pre-filled if logged in)
   const [name, setName] = useState(user?.name || '');
@@ -72,6 +87,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   const [selectedZoneId, setSelectedZoneId] = useState('');
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
+
+  // Idempotency key — one key per logical checkout attempt.
+  // Retries reuse the same key; only a new attempt generates a new one.
+  const idempotencyKeyRef = useRef<string>(generateIdempotencyKey());
+
+  // Price-change review state
+  const [priceChanges, setPriceChanges] = useState<PriceChangeItem[]>([]);
+  const [priceReviewPending, setPriceReviewPending] = useState(false);
 
   // Pre-fill default address if authenticated
   useEffect(() => {
@@ -144,7 +167,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   // Phone validator: Pakistan formats (e.g. 03XXXXXXXXX, +923XXXXXXXXX, 0300-1234567)
   const isValidPkPhone = (val: string) => {
     const cleaned = val.replace(/[\s\-\(\)]/g, '');
-    return /^((\+92)|(0092)|(92))?3[0-9]{9}$/.test(cleaned);
+    return /^((\+92)|(0092)|(92)|0)?3[0-9]{9}$/.test(cleaned);
   };
 
   const validateForm = (): boolean => {
@@ -175,6 +198,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setPriceReviewPending(false);
 
     if (!validateForm()) {
       return;
@@ -198,8 +222,10 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     setSubmitting(true);
 
     try {
-      // Build trusted request payload
+      // Build trusted request payload — include expectedPricePerKg for stale-price detection.
+      // Client-submitted totals are ignored by the server; only these fields matter.
       const payload = {
+        idempotencyKey: idempotencyKeyRef.current,
         customer: {
           name: name.trim(),
           phone: phone.trim(),
@@ -215,19 +241,16 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
           weightInKg: item.weightInKg,
           weightDisplay: item.weightDisplay,
           quantity: item.quantity,
+          // Send the price the customer saw — server detects mismatches.
+          expectedPricePerKg: item.vegetable.isOffer && item.vegetable.offerPrice
+            ? item.vegetable.offerPrice
+            : item.vegetable.pricePerKg,
         })),
       };
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
       const res = await fetch('/api/v1/orders', {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
         credentials: 'include',
       });
@@ -235,6 +258,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
       const data = await res.json();
 
       if (!res.ok || !data.success) {
+        // Stale-price rejection — show price-change review panel
+        if (res.status === 409 && data.code === 'PRICE_CHANGED' && Array.isArray(data.priceChanges)) {
+          setPriceChanges(data.priceChanges);
+          setPriceReviewPending(true);
+          setErrorMessage(null);
+          return;
+        }
+
         if (data.details && Array.isArray(data.details)) {
           const firstErr = data.details[0]?.message || data.error;
           setErrorMessage(firstErr);
@@ -244,13 +275,23 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
         return;
       }
 
-      // Order created successfully
+      // Order created or replayed successfully
       onOrderSuccess(data.order);
     } catch (err: any) {
       setErrorMessage('Unable to place your order right now. Please check your connection and try again.');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  /** Confirm price changes — generate a fresh idempotency key and resubmit. */
+  const handleConfirmPriceChange = () => {
+    // New key signals a new checkout attempt with the reviewed (current) prices.
+    idempotencyKeyRef.current = generateIdempotencyKey();
+    setPriceChanges([]);
+    setPriceReviewPending(false);
+    // Trigger submit programmatically via form button click simulation
+    document.getElementById('place-order-btn')?.click();
   };
 
   return (
@@ -280,13 +321,60 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
           </div>
         </header>
 
-        {/* Global Error Notice if any */}
+        {/* Global Error Notice */}
         {errorMessage && (
           <div className="checkout-error-banner" role="alert">
             <AlertCircle size={20} className="checkout-error-icon" />
             <div className="checkout-error-text">
               <p className="checkout-error-title">Order Submission Failed</p>
               <p>{errorMessage}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Price-Change Review Panel */}
+        {priceReviewPending && priceChanges.length > 0 && (
+          <div className="checkout-price-review-banner" role="alert">
+            <div className="checkout-price-review-header">
+              <RefreshCw size={20} className="checkout-price-review-icon" />
+              <div>
+                <p className="checkout-price-review-title">Prices have changed</p>
+                <p className="checkout-price-review-desc">
+                  The following items have new prices since you added them to your cart.
+                  Please review and confirm to continue.
+                </p>
+              </div>
+            </div>
+            <ul className="checkout-price-change-list">
+              {priceChanges.map((c) => (
+                <li key={c.vegetableId} className="checkout-price-change-item">
+                  <span className="checkout-price-change-name">{c.vegetableName}</span>
+                  <span className="checkout-price-change-prices">
+                    <span className="checkout-price-old">Rs. {c.submittedPricePerKg}/kg</span>
+                    <span className="checkout-price-arrow">→</span>
+                    <span className="checkout-price-new">Rs. {c.currentPricePerKg}/kg</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="checkout-price-review-actions">
+              <button
+                type="button"
+                id="confirm-price-change-btn"
+                className="btn btn-primary checkout-confirm-price-btn"
+                onClick={handleConfirmPriceChange}
+                disabled={submitting}
+              >
+                <RefreshCw size={15} />
+                Confirm New Prices &amp; Place Order
+              </button>
+              <button
+                type="button"
+                className="btn checkout-cancel-price-btn"
+                onClick={() => { setPriceReviewPending(false); setPriceChanges([]); }}
+              >
+                Review Cart First
+              </button>
             </div>
           </div>
         )}

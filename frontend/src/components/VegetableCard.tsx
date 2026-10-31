@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { ShoppingBag, Check, Plus, Minus, AlertCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { ShoppingBag, Check, AlertCircle, Sparkles, Scale, ArrowUpRight } from 'lucide-react';
 
 export interface VegetableItem {
   id: string;
@@ -39,85 +39,55 @@ const FIXED_WEIGHTS = [
   { label: '10kg', kg: 10.00 },
 ] as const;
 
-export function VegetableCard({ vegetable, onAddToCart, onNavigateToProduct }: VegetableCardProps) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [weightMode, setWeightMode]         = useState<'fixed' | 'custom'>('fixed');
-  const [selectedLabel, setSelectedLabel]   = useState<string>('1kg');
-  const [customKgInput, setCustomKgInput]   = useState<string>('15');
-  const [quantity, setQuantity]             = useState<number>(1);
-  const [justAdded, setJustAdded]           = useState<boolean>(false);
+export const VegetableCard: React.FC<VegetableCardProps> = ({
+  vegetable,
+  onAddToCart,
+  onNavigateToProduct,
+}) => {
+  const [weightMode, setWeightMode] = useState<'fixed' | 'custom'>('fixed');
+  const [selectedLabel, setSelectedLabel] = useState<string>('1kg');
+  const [customKgInput, setCustomKgInput] = useState<string>('15');
+  const [justAdded, setJustAdded] = useState<boolean>(false);
+  const quantity = 1;
 
-  /* ─── Scroll-linked animation engine ─────────────────────────────── */
-  useEffect(() => {
-    const elem = wrapRef.current;
-    if (!elem) return;
-
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reducedMotion) {
-      elem.style.setProperty('--scroll-p', '1');
-      return;
-    }
-
-    // If native CSS animation-timeline: view() is supported, leave it to CSS
-    if (typeof CSS !== 'undefined' && CSS.supports?.('animation-timeline', 'view()')) {
-      return;
-    }
-
-    let ticking = false;
-    const update = () => {
-      if (!elem) return;
-      const rect = elem.getBoundingClientRect();
-      const vh   = window.innerHeight;
-      const raw  = (vh - rect.top) / (vh * 0.35);
-      elem.style.setProperty('--scroll-p', String(Math.min(1, Math.max(0, raw))));
-      ticking = false;
-    };
-
-    const onScroll = () => {
-      if (!ticking) { requestAnimationFrame(update); ticking = true; }
-    };
-
-    update();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-    };
-  }, []);
-
-  /* ─── Pricing logic ───────────────────────────────────────────────── */
+  /* Pricing calculations */
   const effectivePricePerKg = vegetable.isOffer && vegetable.offerPrice
     ? vegetable.offerPrice
     : vegetable.pricePerKg;
 
+  const originalPrice = vegetable.isOffer && vegetable.offerPrice ? vegetable.pricePerKg : null;
+  const savingsPerKg = originalPrice ? originalPrice - effectivePricePerKg : 0;
+
   const primaryImg =
-    vegetable.images?.find(i => i.isPrimary)?.url ??
+    vegetable.images?.find((i) => i.isPrimary)?.url ??
     vegetable.images?.[0]?.url ??
     'https://images.unsplash.com/photo-1542838132-92c53300491e?w=800&auto=format&fit=crop&q=80';
 
-  let weightInKg    = 1.0;
+  let weightInKg = 1.0;
   let weightDisplay = '1kg';
-  let isValid       = true;
+  let isValid = true;
   let validationMsg = '';
 
   if (weightMode === 'fixed') {
-    const match = FIXED_WEIGHTS.find(o => o.label === selectedLabel);
-    if (match) { weightInKg = match.kg; weightDisplay = match.label; }
+    const match = FIXED_WEIGHTS.find((o) => o.label === selectedLabel);
+    if (match) {
+      weightInKg = match.kg;
+      weightDisplay = match.label;
+    }
   } else {
     const parsed = parseFloat(customKgInput);
     if (isNaN(parsed) || parsed <= 10.0) {
       isValid = false;
-      validationMsg = 'Must be greater than 10kg';
+      validationMsg = 'Must be greater than 10kg for bulk discount';
       weightInKg = 0;
       weightDisplay = 'Custom';
     } else {
-      weightInKg    = Math.round(parsed * 100) / 100;
+      weightInKg = Math.round(parsed * 100) / 100;
       weightDisplay = `${weightInKg}kg`;
     }
   }
 
-  const unitPrice      = isValid ? Math.round(effectivePricePerKg * weightInKg * 100) / 100 : 0;
+  const unitPrice = isValid ? Math.round(effectivePricePerKg * weightInKg * 100) / 100 : 0;
   const calculatedTotal = isValid ? Math.round(unitPrice * quantity * 100) / 100 : 0;
 
   const handleAddToCart = () => {
@@ -132,182 +102,229 @@ export function VegetableCard({ vegetable, onAddToCart, onNavigateToProduct }: V
       itemTotal: calculatedTotal,
     });
     setJustAdded(true);
-    setTimeout(() => setJustAdded(false), 1200);
+    setTimeout(() => setJustAdded(false), 1400);
   };
 
-  /* ─── Render ──────────────────────────────────────────────────────── */
   return (
-    <div className="product-card-scroll-wrap" ref={wrapRef}>
-      <article className={`product-card${!vegetable.isAvailable ? ' is-unavailable' : ''}`}>
+    <article
+      className={`vip-vegetable-card ${!vegetable.isAvailable ? 'is-out-of-stock' : ''}`}
+    >
+      {/* ── IMAGE SECTION ── */}
+      <div
+        className="vip-card-media-wrap"
+        onClick={onNavigateToProduct}
+        role={onNavigateToProduct ? 'button' : undefined}
+        tabIndex={onNavigateToProduct ? 0 : undefined}
+        onKeyDown={
+          onNavigateToProduct
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') onNavigateToProduct();
+              }
+            : undefined
+        }
+        aria-label={`View details for ${vegetable.name}`}
+      >
+        <img
+          src={primaryImg}
+          alt={vegetable.name}
+          className="vip-card-img"
+          loading="lazy"
+        />
 
-        {/* Image */}
-        <div
-          className={`product-card-img-wrap${onNavigateToProduct ? ' clickable' : ''}`}
-          onClick={onNavigateToProduct}
-          role={onNavigateToProduct ? 'button' : undefined}
-          tabIndex={onNavigateToProduct ? 0 : undefined}
-          onKeyDown={onNavigateToProduct ? (e) => { if (e.key === 'Enter' || e.key === ' ') onNavigateToProduct(); } : undefined}
-          aria-label={onNavigateToProduct ? `View details for ${vegetable.name}` : undefined}
-        >
-          <img
-            src={primaryImg}
-            alt={vegetable.name}
-            className="product-card-img"
-            loading="lazy"
-          />
+        {/* Ambient Gradient Scrim */}
+        <div className="vip-card-img-scrim" />
+
+        {/* Floating Top Badges */}
+        <div className="vip-card-badges-row">
           {!vegetable.isAvailable ? (
-            <span className="badge badge-unavailable product-card-badge">Currently unavailable</span>
+            <span className="vip-pill-badge badge-sold-out">
+              <span className="badge-dot-sold-out" />
+              Sold Out Today
+            </span>
           ) : vegetable.isOffer ? (
-            <span className="badge badge-offer product-card-badge">Offer</span>
-          ) : null}
+            <span className="vip-pill-badge badge-deal">
+              <Sparkles size={12} />
+              Save Rs. {savingsPerKg}/kg
+            </span>
+          ) : (
+            <span className="vip-pill-badge badge-fresh-stock">
+              <span className="badge-dot-fresh" />
+              Fresh Farm Pick
+            </span>
+          )}
+
+          {vegetable.isFeatured && vegetable.isAvailable && (
+            <span className="vip-pill-badge badge-bestseller">Top Seller</span>
+          )}
         </div>
 
-        {/* Body */}
-        <div className="product-card-body">
+        {/* Quick View Floating Hint */}
+        <div className="vip-card-quick-hint">
+          <span>Tap for Details</span>
+          <ArrowUpRight size={14} />
+        </div>
+      </div>
 
-          {/* Name + description */}
-          {onNavigateToProduct ? (
-            <button
-              type="button"
-              className="product-card-title-link"
-              onClick={onNavigateToProduct}
-              aria-label={`View details for ${vegetable.name}`}
-            >
-              <h3 className="product-card-title">{vegetable.name}</h3>
-            </button>
-          ) : (
-            <h3 className="product-card-title">{vegetable.name}</h3>
-          )}
-          <p className="product-card-desc">{vegetable.description}</p>
+      {/* ── CARD BODY ── */}
+      <div className="vip-card-body">
+        {/* Title and Short Description */}
+        <div className="vip-card-title-group">
+          <h3
+            className="vip-card-title"
+            onClick={onNavigateToProduct}
+            title={vegetable.name}
+          >
+            {vegetable.name}
+          </h3>
+          <p className="vip-card-description">{vegetable.description}</p>
+        </div>
 
-          {/* Price per kg */}
-          <div className="product-card-rate-row">
-            <span className="product-rate-label">Rate</span>
-            <div>
-              <span className="product-rate-value">Rs. {effectivePricePerKg}</span>
-              <span className="product-rate-unit"> / kg</span>
+        {/* Rate Display Row */}
+        <div className="vip-card-rate-row">
+          <div className="vip-rate-left">
+            <span className="vip-rate-label">Mandi Rate:</span>
+            <div className="vip-rate-pricing">
+              <strong className="vip-rate-current">Rs. {effectivePricePerKg}</strong>
+              <span className="vip-rate-unit">/ kg</span>
+              {originalPrice && (
+                <span className="vip-rate-original">Rs. {originalPrice}</span>
+              )}
             </div>
           </div>
 
-          {/* Weight selector */}
-          <div className="weight-selector-box">
-            <span className="weight-selector-label">How much do you need?</span>
+          <div className="vip-rate-availability">
+            <span className={`live-radar-container ${vegetable.isAvailable ? 'is-live' : 'is-off'}`}>
+              {vegetable.isAvailable && <span className="live-radar-ping" />}
+              {vegetable.isAvailable && <span className="live-radar-halo" />}
+              <span className="live-radar-point" />
+            </span>
+            <span className="live-radar-label">
+              {vegetable.isAvailable ? 'Live in Stock' : 'Out of Stock'}
+            </span>
+          </div>
+        </div>
 
-            <div className="weight-chips-grid">
-              {FIXED_WEIGHTS.map(opt => (
-                <button
-                  key={opt.label}
-                  type="button"
-                  disabled={!vegetable.isAvailable}
-                  className={`weight-chip-btn${weightMode === 'fixed' && selectedLabel === opt.label ? ' active' : ''}`}
-                  onClick={() => { setWeightMode('fixed'); setSelectedLabel(opt.label); }}
-                  aria-label={`Select ${opt.label}`}
-                >
-                  {opt.label}
-                </button>
-              ))}
+        {/* ── WEIGHT SELECTOR CHIPS ── */}
+        <div className="vip-card-weight-section">
+          <div className="vip-weight-header">
+            <span className="vip-weight-title">
+              <Scale size={13} className="text-emerald-500" />
+              Select Weight:
+            </span>
+            <span className="vip-weight-active-tag">
+              {isValid ? weightDisplay : 'Select valid weight'}
+            </span>
+          </div>
 
+          <div className="vip-weight-chips-grid">
+            {FIXED_WEIGHTS.map((opt) => (
               <button
+                key={opt.label}
                 type="button"
                 disabled={!vegetable.isAvailable}
-                className={`weight-chip-btn custom-chip${weightMode === 'custom' ? ' active' : ''}`}
-                onClick={() => setWeightMode('custom')}
-                aria-label="Select custom weight above 10kg"
+                className={`vip-weight-chip ${
+                  weightMode === 'fixed' && selectedLabel === opt.label ? 'is-active' : ''
+                }`}
+                onClick={() => {
+                  setWeightMode('fixed');
+                  setSelectedLabel(opt.label);
+                }}
               >
-                Custom (&gt; 10kg)
+                {opt.label}
               </button>
-            </div>
+            ))}
 
-            {/* Custom input — only when custom selected */}
-            {weightMode === 'custom' && (
-              <div className="custom-input-wrap">
-                <label htmlFor={`cw-${vegetable.id}`} className="custom-input-label">
-                  Enter kilograms (above 10kg):
+            <button
+              type="button"
+              disabled={!vegetable.isAvailable}
+              className={`vip-weight-chip vip-custom-chip ${
+                weightMode === 'custom' ? 'is-active' : ''
+              }`}
+              onClick={() => setWeightMode('custom')}
+            >
+              Bulk (&gt;10kg)
+            </button>
+          </div>
+
+          {/* Custom Weight Drawer */}
+          {weightMode === 'custom' && (
+            <div className="vip-custom-weight-drawer animate-slide-down">
+              <div className="vip-custom-input-line">
+                <label
+                  htmlFor={`custom-kg-${vegetable.id}`}
+                  className="vip-custom-label"
+                >
+                  Enter kg (&gt;10kg):
                 </label>
-                <div className="custom-input-group">
+                <div className="vip-custom-input-wrap">
                   <input
-                    id={`cw-${vegetable.id}`}
+                    id={`custom-kg-${vegetable.id}`}
                     type="number"
-                    step="0.1"
-                    min="10.1"
-                    placeholder="e.g. 15.5"
+                    step="0.5"
+                    min="10.5"
+                    placeholder="e.g. 15"
                     value={customKgInput}
                     disabled={!vegetable.isAvailable}
-                    onChange={e => setCustomKgInput(e.target.value)}
-                    className="custom-weight-input"
+                    onChange={(e) => setCustomKgInput(e.target.value)}
+                    className="vip-custom-num-input"
                   />
-                  <span className="custom-input-suffix">KG</span>
+                  <span className="vip-custom-suffix">KG</span>
                 </div>
-                {!isValid && (
-                  <div className="custom-input-error">
-                    <AlertCircle size={12} style={{ display: 'inline', marginRight: 3, verticalAlign: -1 }} />
-                    {validationMsg}
-                  </div>
-                )}
               </div>
-            )}
-          </div>
-
-          {/* Calculated price bar */}
-          <div className="product-calculated-price-bar">
-            <span className="calculated-weight-tag">
-              {!vegetable.isAvailable
-                ? 'Unavailable'
-                : isValid
-                ? `${weightDisplay}${quantity > 1 ? ` × ${quantity}` : ''}`
-                : '—'}
-            </span>
-            <span className="calculated-amount-tag">
-              {!vegetable.isAvailable
-                ? '—'
-                : isValid
-                ? `Rs. ${calculatedTotal.toLocaleString()}`
-                : 'Invalid'}
-            </span>
-          </div>
-
-          {/* Quantity + add to cart */}
-          <div className="product-actions-row">
-            <div className="qty-stepper">
-              <button
-                type="button"
-                className="qty-btn"
-                onClick={() => setQuantity(p => Math.max(1, p - 1))}
-                disabled={!vegetable.isAvailable || quantity <= 1}
-                aria-label="Decrease quantity"
-              >
-                <Minus size={14} />
-              </button>
-              <span className="qty-value">{quantity}</span>
-              <button
-                type="button"
-                className="qty-btn"
-                onClick={() => setQuantity(p => p + 1)}
-                disabled={!vegetable.isAvailable}
-                aria-label="Increase quantity"
-              >
-                <Plus size={14} />
-              </button>
-            </div>
-
-            <button
-              type="button"
-              className={`btn-add-cart${!vegetable.isAvailable ? ' btn-unavailable' : justAdded ? ' added' : ''}`}
-              onClick={handleAddToCart}
-              disabled={!isValid || !vegetable.isAvailable}
-            >
-              {!vegetable.isAvailable ? (
-                'Currently unavailable'
-              ) : justAdded ? (
-                <><Check size={16} /> Added</>
-              ) : (
-                <><ShoppingBag size={16} /> Add to Cart</>
+              {!isValid && (
+                <div className="vip-custom-error">
+                  <AlertCircle size={12} />
+                  <span>{validationMsg}</span>
+                </div>
               )}
-            </button>
-          </div>
-
+            </div>
+          )}
         </div>
-      </article>
-    </div>
+
+        {/* ── PRICE TOTAL SUMMARY BAR ── */}
+        <div className="vip-card-price-bar">
+          <div className="vip-total-breakdown">
+            <span className="vip-breakdown-formula">
+              {isValid
+                ? `${weightDisplay} × ${quantity} item${quantity > 1 ? 's' : ''}`
+                : 'Invalid weight'}
+            </span>
+            <div className="vip-total-price">
+              Rs. {calculatedTotal.toLocaleString()}
+            </div>
+          </div>
+        </div>
+
+        {/* ── ACTION: ADD TO CART ── */}
+        <div className="vip-card-action-row">
+          <button
+            type="button"
+            className={`vip-btn-add-cart vip-btn-full-width ${
+              !vegetable.isAvailable
+                ? 'is-disabled'
+                : justAdded
+                ? 'is-success'
+                : ''
+            }`}
+            onClick={handleAddToCart}
+            disabled={!isValid || !vegetable.isAvailable}
+          >
+            {!vegetable.isAvailable ? (
+              <span>Out of Stock</span>
+            ) : justAdded ? (
+              <>
+                <Check size={16} className="animate-bounce" />
+                <span>Added to Cart!</span>
+              </>
+            ) : (
+              <>
+                <ShoppingBag size={16} />
+                <span>Add to Cart ({weightDisplay} · Rs. {calculatedTotal.toLocaleString()})</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </article>
   );
-}
+};

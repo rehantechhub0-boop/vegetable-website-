@@ -8,6 +8,10 @@ dist/
 build/
 */build/
 
+# Generated Prisma clients (contains platform-specific binary engines)
+src/generated/
+*/src/generated/
+
 # Environment variables
 .env
 .env.local
@@ -16,8 +20,10 @@ build/
 # SQLite and database files
 *.db
 *.db-journal
+*.dump
 backend/prisma/*.db
 backend/prisma/*.db-journal
+backend/prisma/*.json
 
 # Uploads and temporary media
 uploads/
@@ -29,3 +35,9 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
+
+test-results/
+playwright-report/
+
+.env.*
+*.env.*

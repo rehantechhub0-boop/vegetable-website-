@@ -2,6 +2,8 @@ import type React from 'react';
 import { useState } from 'react';
 import { Leaf, AlertCircle, ArrowLeft, Lock, Mail, User, Phone } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { GoogleSignInModal } from '../components/GoogleSignInModal';
+import { GenuineGoogleButton } from '../components/GenuineGoogleButton';
 
 interface RegisterPageProps {
   onNavigateHome: () => void;
@@ -21,6 +23,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
 
   const setUser = useAuthStore((s) => s.setUser);
 
@@ -68,7 +71,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
         return;
       }
 
-      setUser(data.user, data.token);
+      setUser(data.user);
       onSuccess();
     } catch (err) {
       setError('Connection failed. Please check your network and try again.');
@@ -79,6 +82,11 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
 
   return (
     <main className="auth-page-wrapper">
+      <GoogleSignInModal
+        isOpen={isGoogleModalOpen}
+        onClose={() => setIsGoogleModalOpen(false)}
+        onSuccess={onSuccess}
+      />
       <div className="container auth-container">
         <div className="auth-card">
           <button
@@ -104,6 +112,17 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
               <span>{error}</span>
             </div>
           )}
+
+          {/* Genuine Google Identity Services Button */}
+          <GenuineGoogleButton
+            onSuccess={onSuccess}
+            onError={(errMsg) => setError(errMsg)}
+            onOpenFallbackModal={() => setIsGoogleModalOpen(true)}
+          />
+
+          <div className="auth-divider">
+            <span>or register with email</span>
+          </div>
 
           <form onSubmit={handleSubmit} className="auth-form" noValidate>
             <div className="checkout-input-group">

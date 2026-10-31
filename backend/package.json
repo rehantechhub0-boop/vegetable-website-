@@ -5,15 +5,31 @@
   "main": "src/server.ts",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "clean": "node -e \"const fs=require('fs'); fs.rmSync('dist', {recursive:true, force:true});\"",
+    "prebuild": "npm run db:generate:pg",
     "build": "tsc",
+    "postbuild": "node scripts/copy-pg-client.js",
     "start": "node dist/server.js",
     "db:migrate": "prisma migrate dev --name init",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
+    "test:setup-db": "tsx src/tests/setup-test-db.ts",
     "test:weight": "tsx src/tests/weight.test.ts",
     "test:orders": "tsx src/tests/order.test.ts",
     "test:auth": "tsx src/tests/auth.test.ts",
-    "test": "tsx src/tests/weight.test.ts && tsx src/tests/order.test.ts && tsx src/tests/auth.test.ts"
+    "test:http": "tsx src/tests/http.integration.test.ts",
+    "test:admin": "tsx src/tests/admin.test.ts",
+    "test:idempotency": "tsx src/tests/idempotency.test.ts",
+    "test:search": "tsx src/tests/search.test.ts",
+    "test:security": "tsx src/tests/security.test.ts",
+    "db:generate:pg": "tsx src/scripts/generate-pg-client.ts",
+    "db:migrate:pg": "tsx src/scripts/migrate-pg.ts",
+    "db:export:sqlite": "tsx src/scripts/export-sqlite-data.ts",
+    "db:import:pg": "tsx src/scripts/import-pg-data.ts",
+    "db:diff:pg": "prisma migrate diff --from-empty --to-schema-datamodel=./prisma/schema.postgresql.prisma --script",
+    "test:pg-runtime": "tsx src/tests/pg-runtime-verification.ts",
+    "start:e2e": "tsx src/tests/run-e2e-server.ts",
+    "test": "tsx src/tests/weight.test.ts && tsx src/tests/order.test.ts && tsx src/tests/idempotency.test.ts && tsx src/tests/auth.test.ts && tsx src/tests/http.integration.test.ts && tsx src/tests/admin.test.ts && tsx src/tests/search.test.ts && tsx src/tests/security.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -21,9 +37,11 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
-    "sharp": "^0.33.5",
+    "sharp": "^0.35.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -33,7 +51,9 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/multer": "^1.4.12",
     "@types/node": "^22.8.1",
+    "@types/supertest": "^7.2.1",
     "prisma": "^5.22.0",
+    "supertest": "^7.3.1",
     "tsx": "^4.19.1",
     "typescript": "^5.6.3"
   }

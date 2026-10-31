@@ -71,13 +71,13 @@ async function main() {
     });
   }
 
-  // 5. Authentic Fresh Vegetables Only (No fruits, no grocery bloat)
+  // 5. Authentic Fresh Vegetables Only (Full stock, 24 authentic varieties)
   const vegetables = [
     {
       name: 'Tamatar (Fresh Red Tomatoes)',
       slug: 'fresh-tomatoes',
-      description: 'Firm, juicy farm-fresh tomatoes. Perfect for curries, salads, and traditional handi.',
-      pricePerKg: 180,
+      description: 'Firm, juicy farm-fresh tomatoes. Hand-picked daily, perfect for curries, salads, and traditional handi.',
+      pricePerKg: 160,
       isAvailable: true,
       isFeatured: true,
       isOffer: false,
@@ -87,23 +87,23 @@ async function main() {
       ]
     },
     {
-      name: 'Aloo (Farm Fresh Potatoes)',
+      name: 'Aloo (Farm Fresh Golden Potatoes)',
       slug: 'fresh-potatoes',
-      description: 'Clean, thin-skinned golden potatoes freshly harvested. Excellent for all daily cooking.',
+      description: 'Clean, thin-skinned golden potatoes freshly harvested. Essential staple for daily cooking, aloo parathas, and fries.',
       pricePerKg: 120,
       isAvailable: true,
       isFeatured: true,
       isOffer: true,
-      offerPrice: 100,
+      offerPrice: 95,
       images: [
         'https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=800&auto=format&fit=crop&q=80'
       ]
     },
     {
-      name: 'Pyaz (Red Onions)',
+      name: 'Pyaz (Desi Red Onions)',
       slug: 'red-onions',
-      description: 'Pungent, dry, crisp red onions. Essential staple for everyday Pakistani cooking.',
-      pricePerKg: 220,
+      description: 'Pungent, dry, crisp red onions. Essential staple for rich gravy base and everyday Pakistani handi cooking.',
+      pricePerKg: 190,
       isAvailable: true,
       isFeatured: true,
       isOffer: false,
@@ -114,8 +114,8 @@ async function main() {
     {
       name: 'Bhindi (Tender Lady Finger / Okra)',
       slug: 'fresh-bhindi-okra',
-      description: 'Young, tender, bright green bhindi. Freshly picked without fibrous strings.',
-      pricePerKg: 240,
+      description: 'Young, tender, bright green bhindi. Freshly picked without fibrous strings, quick to cook and crispy.',
+      pricePerKg: 220,
       isAvailable: true,
       isFeatured: true,
       isOffer: false,
@@ -126,20 +126,21 @@ async function main() {
     {
       name: 'Palak (Fresh Leafy Spinach)',
       slug: 'fresh-spinach-palak',
-      description: 'Washed, vibrant green leafy spinach loaded with iron and minerals. Great for Palak Gosht and Daal.',
-      pricePerKg: 140,
+      description: 'Washed, vibrant green leafy spinach loaded with iron and minerals. Perfect for Palak Paneer, Palak Gosht, and Daal.',
+      pricePerKg: 110,
       isAvailable: true,
-      isFeatured: false,
-      isOffer: false,
+      isFeatured: true,
+      isOffer: true,
+      offerPrice: 85,
       images: [
         'https://images.unsplash.com/photo-1576045057995-568f588f82fb?w=800&auto=format&fit=crop&q=80'
       ]
     },
     {
-      name: 'Kheera (Crisp Salad Cucumbers)',
+      name: 'Kheera (Crisp Desi Salad Cucumbers)',
       slug: 'fresh-cucumber-kheera',
-      description: 'Hydrating, crisp desi salad cucumbers. Freshly cut and cool.',
-      pricePerKg: 160,
+      description: 'Hydrating, crisp desi salad cucumbers. Cool, crunchy, and freshly harvested for refreshing daily salads.',
+      pricePerKg: 140,
       isAvailable: true,
       isFeatured: false,
       isOffer: false,
@@ -148,10 +149,10 @@ async function main() {
       ]
     },
     {
-      name: 'Phool Gobi (Cauliflower)',
+      name: 'Phool Gobi (Snow-White Cauliflower)',
       slug: 'fresh-cauliflower-gobi',
-      description: 'Tight, snow-white cauliflower florets with crisp outer green leaves.',
-      pricePerKg: 190,
+      description: 'Tight, snow-white cauliflower florets with crisp outer green leaves. Firm head with excellent taste.',
+      pricePerKg: 160,
       isAvailable: true,
       isFeatured: false,
       isOffer: false,
@@ -160,10 +161,22 @@ async function main() {
       ]
     },
     {
-      name: 'Shimla Mirch (Green Bell Pepper)',
+      name: 'Band Gobi (Crisp Green Cabbage)',
+      slug: 'fresh-cabbage-band-gobi',
+      description: 'Tightly packed, crisp green cabbage heads. Ideal for Chinese dishes, vegetable rolls, and fresh slaws.',
+      pricePerKg: 110,
+      isAvailable: true,
+      isFeatured: false,
+      isOffer: false,
+      images: [
+        'https://images.unsplash.com/photo-1598030304671-5aa1d6f21128?w=800&auto=format&fit=crop&q=80'
+      ]
+    },
+    {
+      name: 'Shimla Mirch (Green Bell Pepper / Capsicum)',
       slug: 'shimla-mirch-capsicum',
-      description: 'Thick, sweet, aromatic green capsicums. Adds aroma to Jalfrezi and mixed sabzi.',
-      pricePerKg: 280,
+      description: 'Thick-walled, aromatic green capsicums. Adds aroma, crunch, and flavor to Jalfrezi, pizza, and mixed sabzi.',
+      pricePerKg: 240,
       isAvailable: true,
       isFeatured: false,
       isOffer: false,
@@ -172,10 +185,10 @@ async function main() {
       ]
     },
     {
-      name: 'Hari Mirch (Fresh Green Chillies)',
+      name: 'Hari Mirch (Fiery Fresh Green Chillies)',
       slug: 'spicy-green-chillies',
-      description: 'Fiery, fresh green chillies packed with punchy aroma.',
-      pricePerKg: 300,
+      description: 'Vibrant, slender desi green chillies packed with punchy aroma and natural spice. Sourced fresh from local growers.',
+      pricePerKg: 260,
       isAvailable: true,
       isFeatured: false,
       isOffer: false,
@@ -184,15 +197,173 @@ async function main() {
       ]
     },
     {
-      name: 'Adrak & Lehsan (Ginger & Garlic Pair)',
-      slug: 'fresh-ginger-garlic',
-      description: 'Clean, plump ginger rhizomes and aromatic garlic bulbs. Kitchen essentials.',
-      pricePerKg: 650,
-      isAvailable: false,
+      name: 'Gajar (Sweet Farm-Fresh Red Carrots)',
+      slug: 'sweet-red-carrots-gajar',
+      description: 'Bright red, crunchy sweet desi carrots. Sourced fresh from farms, perfect for Gajar ka Halwa, salads, and mixed sabzi.',
+      pricePerKg: 120,
+      isAvailable: true,
+      isFeatured: true,
+      isOffer: true,
+      offerPrice: 99,
+      images: [
+        'https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=800&auto=format&fit=crop&q=80'
+      ]
+    },
+    {
+      name: 'Mooli (Crisp White Salad Radish)',
+      slug: 'crisp-white-radish-mooli',
+      description: 'Clean, spicy-sweet white radishes with tender green leafy tops. Excellent for Mooli parathas and winter salads.',
+      pricePerKg: 80,
+      isAvailable: true,
+      isFeatured: false,
+      isOffer: false,
+      images: [
+        'https://images.unsplash.com/photo-1592417817098-8f3d69104a49?w=800&auto=format&fit=crop&q=80'
+      ]
+    },
+    {
+      name: 'Matar (Sweet Green Peas in Pods)',
+      slug: 'sweet-green-peas-matar',
+      description: 'Plump, naturally sweet green peas in fresh pods. Hand-sorted for high yield and rich flavor in Matar Pulao.',
+      pricePerKg: 250,
+      isAvailable: true,
+      isFeatured: true,
+      isOffer: false,
+      images: [
+        'https://images.unsplash.com/photo-1587735243615-c03f25aaff15?w=800&auto=format&fit=crop&q=80'
+      ]
+    },
+    {
+      name: 'Baingan (Glossy Purple Eggplant / Brinjal)',
+      slug: 'glossy-purple-eggplant-baingan',
+      description: 'Shining, deep purple eggplants with minimal seeds and tender white flesh. Perfect for Baingan ka Bharta and Aloo Baingan.',
+      pricePerKg: 130,
+      isAvailable: true,
+      isFeatured: false,
+      isOffer: false,
+      images: [
+        'https://images.unsplash.com/photo-1621841957884-1210fe19d66d?w=800&auto=format&fit=crop&q=80'
+      ]
+    },
+    {
+      name: 'Karela (Tender Desi Bitter Gourd)',
+      slug: 'fresh-bitter-gourd-karela',
+      description: 'Deep green, bumpy desi karela. Known for its medicinal benefits, detox properties, and delicious Bharwan Karela recipe.',
+      pricePerKg: 180,
+      isAvailable: true,
+      isFeatured: false,
+      isOffer: false,
+      images: [
+        'https://images.unsplash.com/photo-1629858349479-7a544f808759?w=800&auto=format&fit=crop&q=80'
+      ]
+    },
+    {
+      name: 'Kaddu / Lauki (Tender Bottle Gourd)',
+      slug: 'fresh-bottle-gourd-lauki',
+      description: 'Smooth, light green tender bottle gourd. Highly refreshing, easy to digest, and perfect for daal kaddu or kheer.',
+      pricePerKg: 100,
+      isAvailable: true,
+      isFeatured: false,
+      isOffer: false,
+      images: [
+        'https://images.unsplash.com/photo-1597362925123-77861d3fbac7?w=800&auto=format&fit=crop&q=80'
+      ]
+    },
+    {
+      name: 'Teenda (Desi Round Gourd)',
+      slug: 'desi-round-gourd-teenda',
+      description: 'Tender small round desi teenda. Soft inside with quick cooking time, traditional home cooking favorite.',
+      pricePerKg: 130,
+      isAvailable: true,
+      isFeatured: false,
+      isOffer: false,
+      images: [
+        'https://images.unsplash.com/photo-1590165482129-1b8b27698780?w=800&auto=format&fit=crop&q=80'
+      ]
+    },
+    {
+      name: 'Adrak (Fresh Aromatic Ginger)',
+      slug: 'fresh-ginger-adrak',
+      description: 'Clean, plump, high-fiber ginger rhizomes. Delivers robust heat and digestive fragrance to Pakistani recipes.',
+      pricePerKg: 540,
+      isAvailable: true,
       isFeatured: false,
       isOffer: false,
       images: [
         'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=800&auto=format&fit=crop&q=80'
+      ]
+    },
+    {
+      name: 'Desi Lehsan (Pungent White Garlic)',
+      slug: 'desi-garlic-lehsan',
+      description: 'Dry, firm white garlic bulbs with concentrated natural oils. Hand-cleaned and sorted for maximum aroma.',
+      pricePerKg: 460,
+      isAvailable: true,
+      isFeatured: false,
+      isOffer: false,
+      images: [
+        'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=800&auto=format&fit=crop&q=80'
+      ]
+    },
+    {
+      name: 'Dhaniya & Pudina Bundle (Fresh Coriander & Mint)',
+      slug: 'dhaniya-pudina-mint-coriander',
+      description: 'Aromatic bouquet of freshly picked coriander leaves and fragrant mint sprigs. The soul of green chutney and garnishing.',
+      pricePerKg: 160,
+      isAvailable: true,
+      isFeatured: false,
+      isOffer: false,
+      images: [
+        'https://images.unsplash.com/photo-1514733670139-4d87a1941d55?w=800&auto=format&fit=crop&q=80'
+      ]
+    },
+    {
+      name: 'Chukandar (Fresh Red Beetroot)',
+      slug: 'fresh-red-beetroot-chukandar',
+      description: 'Firm, earthy, deep ruby-red farm beetroots. Rich in iron, natural nitrates, and vitamins. Ideal for juicing and raw salads.',
+      pricePerKg: 140,
+      isAvailable: true,
+      isFeatured: false,
+      isOffer: false,
+      images: [
+        'https://images.unsplash.com/photo-1526470608268-f674ce90ebd4?w=800&auto=format&fit=crop&q=80'
+      ]
+    },
+    {
+      name: 'Shalgam (Tender Purple Top Turnips)',
+      slug: 'fresh-turnips-shalgam',
+      description: 'Crisp, sweet-peppery purple top turnips. Cooked into traditional Shalgam Gosht or pickled for desi pickles.',
+      pricePerKg: 90,
+      isAvailable: true,
+      isFeatured: false,
+      isOffer: false,
+      images: [
+        'https://images.unsplash.com/photo-1593105544559-ecb03bf76f82?w=800&auto=format&fit=crop&q=80'
+      ]
+    },
+    {
+      name: 'Arvi (Tender Taro Root)',
+      slug: 'desi-taro-root-arvi',
+      description: 'Clean, hairy desi arvi roots with firm cream-colored flesh. Delicious when fried or simmered in Arvi Gosht salan.',
+      pricePerKg: 210,
+      isAvailable: true,
+      isFeatured: false,
+      isOffer: false,
+      images: [
+        'https://images.unsplash.com/photo-1598030304671-5aa1d6f21128?w=800&auto=format&fit=crop&q=80'
+      ]
+    },
+    {
+      name: 'Desi Lemons / Nimbu (Juicy Yellow Lemons)',
+      slug: 'fresh-yellow-lemons-nimbu',
+      description: 'Thin-skinned, highly aromatic yellow desi lemons bursting with tart citrus juice. Rich source of natural Vitamin C.',
+      pricePerKg: 320,
+      isAvailable: true,
+      isFeatured: true,
+      isOffer: true,
+      offerPrice: 280,
+      images: [
+        'https://images.unsplash.com/photo-1534948216015-843149f72be3?w=800&auto=format&fit=crop&q=80'
       ]
     }
   ];

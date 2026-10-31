@@ -1,8 +1,12 @@
 import { PrismaClient } from '@prisma/client';
+import crypto from 'crypto';
 import { CreateOrderInput } from '../schemas/order.schema.js';
 import { validateAndCalculateWeight, ALLOWED_FIXED_WEIGHTS } from './weight.service.js';
 
+// ─── Public Interfaces ───────────────────────────────────────────────────────
+
 export interface OrderCreationResult {
+  replayed?: boolean;
   order: {
     id: number;
     orderNumber: string;
@@ -19,6 +23,13 @@ export interface OrderCreationResult {
     deliveryAddress: string;
     deliveryNotes: string | null;
     createdAt: string;
+    statusHistory?: Array<{
+      id: string;
+      fromStatus: string | null;
+      toStatus: string;
+      note: string | null;
+      createdAt: string;
+    }>;
     items: Array<{
       id: string;
       vegetableId: string | null;
@@ -34,6 +45,16 @@ export interface OrderCreationResult {
   };
 }
 
+/** Per-item price-change detail surfaced to the caller. */
+export interface PriceChangeDetail {
+  vegetableId: string;
+  vegetableName: string;
+  submittedPricePerKg: number;
+  currentPricePerKg: number;
+}
+
+// ─── Custom Errors ───────────────────────────────────────────────────────────
+
 export class OrderValidationError extends Error {
   statusCode: number;
   constructor(message: string, statusCode: number = 400) {
@@ -43,17 +64,185 @@ export class OrderValidationError extends Error {
   }
 }
 
+/**
+ * Thrown when the submitted idempotency key was already used with a
+ * materially different payload (different items/zone/customer).
+ */
+export class IdempotencyConflictError extends Error {
+  statusCode: number;
+  constructor(message: string) {
+    super(message);
+    this.name = 'IdempotencyConflictError';
+    this.statusCode = 409;
+  }
+}
+
+/**
+ * Thrown when one or more cart items have a price that has changed since
+ * the customer built their cart.  The caller should surface `priceChanges`
+ * to the customer for explicit review before they can proceed.
+ */
+export class StalePriceError extends Error {
+  statusCode: number;
+  priceChanges: PriceChangeDetail[];
+  constructor(changes: PriceChangeDetail[]) {
+    super(
+      'One or more item prices have changed since you built your cart. ' +
+      'Please review and confirm before proceeding.'
+    );
+    this.name = 'StalePriceError';
+    this.statusCode = 409;
+    this.priceChanges = changes;
+  }
+}
+
+// ─── Internal Helpers ────────────────────────────────────────────────────────
+
+/**
+ * Build a stable SHA-256 hash of the meaningful checkout fields.
+ * Volatile fields (timestamps, UI labels, nonces) are excluded so that a
+ * genuine retry of the SAME attempt produces an identical hash.
+ * Including expectedPricePerKg means a customer who reviews new prices
+ * gets a different hash — and therefore a new idempotency window.
+ */
+function buildPayloadHash(input: CreateOrderInput): string {
+  const canonical = {
+    customerPhone: input.customer.phone.trim(),
+    customerName: input.customer.name.trim(),
+    zoneId: input.delivery.zoneId.trim(),
+    address: input.delivery.address.trim(),
+    items: [...input.items]
+      .sort((a, b) => a.vegetableId.localeCompare(b.vegetableId))
+      .map((it) => ({
+        vegetableId: it.vegetableId,
+        weightInKg: it.weightInKg,
+        quantity: it.quantity,
+        expectedPricePerKg: it.expectedPricePerKg ?? null,
+      })),
+    paymentMethod: input.paymentMethod,
+  };
+  return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
+}
+
+/** Map a raw Prisma order record to the public OrderCreationResult shape. */
+function mapOrderRecord(
+  order: any,
+  zoneName: string,
+  replayed = false
+): OrderCreationResult {
+  return {
+    replayed,
+    order: {
+      id: order.id,
+      orderNumber: `ORD-${order.id}`,
+      uuid: order.uuid,
+      orderStatus: order.orderStatus,
+      paymentStatus: order.paymentStatus,
+      paymentMethod: order.paymentMethod,
+      subtotal: order.subtotal,
+      deliveryFee: order.deliveryFee,
+      grandTotal: order.grandTotal,
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      deliveryZone: order.deliveryZone?.areaName || zoneName,
+      deliveryAddress: order.deliveryAddress,
+      deliveryNotes: order.deliveryNotes,
+      createdAt: order.createdAt.toISOString(),
+      statusHistory: order.statusHistory?.map((sh: any) => ({
+        id: sh.id,
+        fromStatus: sh.fromStatus,
+        toStatus: sh.toStatus,
+        note: sh.note,
+        createdAt: sh.createdAt.toISOString(),
+      })) || [],
+      items: order.items.map((it: any) => ({
+        id: it.id,
+        vegetableId: it.vegetableId,
+        vegetableName: it.vegetableName,
+        vegetableImage: it.vegetableImage,
+        pricePerKg: it.pricePerKg,
+        weightDisplay: it.weightDisplay,
+        weightInKg: it.weightInKg,
+        unitPrice: it.unitPrice,
+        quantity: it.quantity,
+        itemTotal: it.itemTotal,
+      })),
+    },
+  };
+}
+
 export async function createOrder(
   prisma: PrismaClient,
   input: CreateOrderInput,
   authenticatedUserId?: string | null
 ): Promise<OrderCreationResult> {
-  // 1. Payment Method check
+
+  // ── Step 0: COD-only guard ──────────────────────────────────────────────
   if (input.paymentMethod !== 'COD') {
-    throw new OrderValidationError('Online payment is not available yet. Please select Cash on Delivery (COD).', 400);
+    throw new OrderValidationError(
+      'Online payment is not available yet. Please select Cash on Delivery (COD).',
+      400
+    );
   }
 
-  // 2. Delivery Zone validation
+  // ── Step 1: Idempotency key processing ────────────────────────────────────
+  const idempotencyKey = input.idempotencyKey ? input.idempotencyKey.trim() : '';
+  if (!idempotencyKey || idempotencyKey.length < 8) {
+    throw new OrderValidationError(
+      'A valid idempotency key (minimum 8 characters) is required for checkout.',
+      400
+    );
+  }
+
+  const payloadHash = buildPayloadHash(input);
+
+  // Look for an existing order created with this key.
+  const existing = await prisma.order.findUnique({
+    where: { idempotencyKey },
+    include: {
+      deliveryZone: true,
+      items: true,
+      statusHistory: { orderBy: { createdAt: 'asc' } },
+    },
+  });
+
+  if (existing) {
+    // Key already used — verify the payload hash to detect changed payloads.
+    if (existing.idempotencyPayloadHash !== payloadHash) {
+      throw new IdempotencyConflictError(
+        'This checkout key was already used with different order details. ' +
+        'To place a new order with these changes, please start a new checkout attempt.'
+      );
+    }
+
+    // Strict Scope check: key must belong to the exact same customer identity.
+    if (existing.userId) {
+      // Authenticated order: can only be replayed by the matching authenticated account.
+      if (!authenticatedUserId || existing.userId !== authenticatedUserId) {
+        throw new IdempotencyConflictError(
+          'This checkout key belongs to a different account.'
+        );
+      }
+    } else {
+      // Guest order: cannot be replayed by an authenticated account,
+      // and guest phone must match the original snapshot.
+      if (authenticatedUserId) {
+        throw new IdempotencyConflictError(
+          'This checkout key belongs to a guest order.'
+        );
+      }
+      if (existing.customerPhone !== input.customer.phone.trim()) {
+        throw new IdempotencyConflictError(
+          'This checkout key does not match the phone number used in the original attempt.'
+        );
+      }
+    }
+
+    // Valid replay — return existing order without creating a new one.
+    return mapOrderRecord(existing, existing.deliveryZone?.areaName || '', true);
+  }
+
+  // ── Step 2: Delivery Zone validation ──────────────────────────────────────
   const zone = await prisma.deliveryZone.findUnique({
     where: { id: input.delivery.zoneId },
   });
@@ -63,12 +252,15 @@ export async function createOrder(
   }
 
   if (!zone.isActive) {
-    throw new OrderValidationError('Selected delivery zone is currently inactive and not accepting deliveries.', 400);
+    throw new OrderValidationError(
+      'Selected delivery zone is currently inactive and not accepting deliveries.',
+      400
+    );
   }
 
   const deliveryFee = zone.deliveryFee;
 
-  // 3. Vegetable & Item validation + Server-side price calculation
+  // ── Step 3: Vegetable validation + server-side price calculation ───────────
   const validatedItems: Array<{
     vegetableId: string;
     vegetableName: string;
@@ -82,19 +274,19 @@ export async function createOrder(
   }> = [];
 
   let calculatedSubtotal = 0;
+  const priceChanges: PriceChangeDetail[] = [];
 
   for (const item of input.items) {
     const vegetable = await prisma.vegetable.findUnique({
       where: { id: item.vegetableId },
-      include: {
-        images: {
-          orderBy: { orderIndex: 'asc' },
-        },
-      },
+      include: { images: { orderBy: { orderIndex: 'asc' } } },
     });
 
     if (!vegetable) {
-      throw new OrderValidationError(`Vegetable with ID "${item.vegetableId}" was not found.`, 404);
+      throw new OrderValidationError(
+        `Vegetable with ID "${item.vegetableId}" was not found.`,
+        404
+      );
     }
 
     if (!vegetable.isAvailable) {
@@ -104,23 +296,39 @@ export async function createOrder(
       );
     }
 
-    // Determine effective price per kg from DB
+    // Authoritative server price (offer price wins when active).
     const authoritativePricePerKg =
       vegetable.isOffer && vegetable.offerPrice !== null && vegetable.offerPrice !== undefined
         ? vegetable.offerPrice
         : vegetable.pricePerKg;
 
     if (authoritativePricePerKg <= 0 || isNaN(authoritativePricePerKg)) {
-      throw new OrderValidationError(`Invalid price configuration for "${vegetable.name}".`, 400);
+      throw new OrderValidationError(
+        `Invalid price configuration for "${vegetable.name}".`,
+        400
+      );
     }
 
-    // Determine weight mode: fixed vs custom
+    // ── Stale-price check ────────────────────────────────────────────────
+    if (item.expectedPricePerKg !== undefined && item.expectedPricePerKg !== null) {
+      const submittedRounded = Math.round(item.expectedPricePerKg * 100) / 100;
+      const currentRounded   = Math.round(authoritativePricePerKg * 100) / 100;
+      if (submittedRounded !== currentRounded) {
+        priceChanges.push({
+          vegetableId: vegetable.id,
+          vegetableName: vegetable.name,
+          submittedPricePerKg: submittedRounded,
+          currentPricePerKg: currentRounded,
+        });
+      }
+    }
+
+    // Determine weight mode: fixed vs custom.
     const requestedWeightKg = Math.round(item.weightInKg * 100) / 100;
     let selectionType: 'fixed' | 'custom';
     let fixedKey: string | null = null;
     let customWeightKg: number | null = null;
 
-    // Check if it matches any fixed weight (e.g. 0.25 -> 250g, 0.5 -> 500g, 1 -> 1kg, 2 -> 2kg, 5 -> 5kg, 10 -> 10kg)
     const fixedEntry = Object.entries(ALLOWED_FIXED_WEIGHTS).find(
       ([, kg]) => Math.abs(kg - requestedWeightKg) < 0.0001
     );
@@ -133,16 +341,20 @@ export async function createOrder(
       customWeightKg = requestedWeightKg;
     }
 
-    // Run authoritative calculation and weight constraint validation through weight.service.ts
-    const weightCalc = validateAndCalculateWeight(
-      selectionType,
-      fixedKey,
-      customWeightKg,
-      authoritativePricePerKg,
-      item.quantity
-    );
+    // Authoritative weight calculation (also validates weight constraints).
+    let weightCalc;
+    try {
+      weightCalc = validateAndCalculateWeight(
+        selectionType,
+        fixedKey,
+        customWeightKg,
+        authoritativePricePerKg,
+        item.quantity
+      );
+    } catch (weightErr: any) {
+      throw new OrderValidationError(weightErr.message || 'Invalid weight or quantity selection.', 400);
+    }
 
-    // Primary vegetable image for historical snapshot
     const primaryImage =
       vegetable.images.find((img) => img.isPrimary)?.url ||
       vegetable.images[0]?.url ||
@@ -163,86 +375,150 @@ export async function createOrder(
     calculatedSubtotal = Math.round((calculatedSubtotal + weightCalc.itemTotal) * 100) / 100;
   }
 
-  // Check minimum order amount if zone has one
+  // Surface all stale-price changes at once — customer reviews the whole list.
+  if (priceChanges.length > 0) {
+    throw new StalePriceError(priceChanges);
+  }
+
+  // ── Step 4: Minimum order amount ──────────────────────────────────────────
   if (zone.minOrderAmount > 0 && calculatedSubtotal < zone.minOrderAmount) {
     throw new OrderValidationError(
-      `Minimum order amount for ${zone.areaName} is Rs. ${zone.minOrderAmount}. Current subtotal: Rs. ${calculatedSubtotal}.`,
+      `Minimum order amount for ${zone.areaName} is Rs. ${zone.minOrderAmount}. ` +
+      `Current subtotal: Rs. ${calculatedSubtotal}.`,
       400
     );
   }
 
   const calculatedGrandTotal = Math.round((calculatedSubtotal + deliveryFee) * 100) / 100;
 
-  // 4. Atomic Prisma Transaction
-  const createdOrder = await prisma.$transaction(async (tx) => {
-    const orderRecord = await tx.order.create({
+  // ── Step 5: Atomic DB transaction ─────────────────────────────────────────
+  //
+  // The DB-level UNIQUE constraint on idempotencyKey is the last defence
+  // against concurrent duplicate requests.  If two concurrent requests arrive
+  // with the same key, the slower one will receive a P2002 unique-constraint
+  // violation which we catch and convert to a replay response.
+  let createdOrder: any;
+  try {
+    createdOrder = await prisma.$transaction(async (tx) => {
+      return tx.order.create({
+        data: {
+          userId: authenticatedUserId || null,
+          customerName: input.customer.name.trim(),
+          customerPhone: input.customer.phone.trim(),
+          deliveryAddress: input.delivery.address.trim(),
+          deliveryZoneId: zone.id,
+          deliveryNotes: input.delivery.notes ? input.delivery.notes.trim() : null,
+          subtotal: calculatedSubtotal,
+          deliveryFee: deliveryFee,
+          grandTotal: calculatedGrandTotal,
+          paymentMethod: 'COD',
+          paymentStatus: 'COD',
+          orderStatus: 'NEW',
+          idempotencyKey: idempotencyKey,
+          idempotencyPayloadHash: payloadHash,
+          items: {
+            create: validatedItems.map((it) => ({
+              vegetableId: it.vegetableId,
+              vegetableName: it.vegetableName,
+              vegetableImage: it.vegetableImage,
+              pricePerKg: it.pricePerKg,
+              weightDisplay: it.weightDisplay,
+              weightInKg: it.weightInKg,
+              unitPrice: it.unitPrice,
+              quantity: it.quantity,
+              itemTotal: it.itemTotal,
+            })),
+          },
+          statusHistory: {
+            create: {
+              fromStatus: null,
+              toStatus: 'NEW',
+              note: 'Order placed by customer (Cash on Delivery)',
+            },
+          },
+        },
+        include: {
+          deliveryZone: true,
+          items: true,
+          statusHistory: { orderBy: { createdAt: 'asc' } },
+        },
+      });
+    });
+  } catch (err: any) {
+    // Concurrent duplicate: unique constraint on idempotencyKey fired.
+    if (err?.code === 'P2002' && idempotencyKey) {
+      const raceWinner = await prisma.order.findUnique({
+        where: { idempotencyKey },
+        include: {
+          deliveryZone: true,
+          items: true,
+          statusHistory: { orderBy: { createdAt: 'asc' } },
+        },
+      });
+      if (raceWinner) return mapOrderRecord(raceWinner, zone.areaName, true);
+    }
+    throw err;
+  }
+
+  return mapOrderRecord(createdOrder, zone.areaName, false);
+}
+
+export const VALID_ORDER_STATUSES = [
+  'NEW',
+  'CONFIRMED',
+  'PREPARING',
+  'OUT_FOR_DELIVERY',
+  'DELIVERED',
+  'CANCELLED',
+] as const;
+
+export type OrderStatusType = typeof VALID_ORDER_STATUSES[number];
+
+export async function updateOrderStatus(
+  prisma: PrismaClient,
+  orderId: number,
+  newStatus: string,
+  note?: string
+) {
+  if (!VALID_ORDER_STATUSES.includes(newStatus as OrderStatusType)) {
+    throw new OrderValidationError(`Invalid order status: ${newStatus}`, 400);
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    const existing = await tx.order.findUnique({
+      where: { id: orderId },
+      include: { deliveryZone: true, items: true, statusHistory: true },
+    });
+
+    if (!existing) {
+      throw new OrderValidationError('Order not found.', 404);
+    }
+
+    if (existing.orderStatus === newStatus) {
+      return existing;
+    }
+
+    const updated = await tx.order.update({
+      where: { id: orderId },
       data: {
-        userId: authenticatedUserId || null,
-        customerName: input.customer.name.trim(),
-        customerPhone: input.customer.phone.trim(),
-        deliveryAddress: input.delivery.address.trim(),
-        deliveryZoneId: zone.id,
-        deliveryNotes: input.delivery.notes ? input.delivery.notes.trim() : null,
-        subtotal: calculatedSubtotal,
-        deliveryFee: deliveryFee,
-        grandTotal: calculatedGrandTotal,
-        paymentMethod: 'COD',
-        paymentStatus: 'COD',
-        orderStatus: 'NEW',
-        items: {
-          create: validatedItems.map((it) => ({
-            vegetableId: it.vegetableId,
-            vegetableName: it.vegetableName,
-            vegetableImage: it.vegetableImage,
-            pricePerKg: it.pricePerKg,
-            weightDisplay: it.weightDisplay,
-            weightInKg: it.weightInKg,
-            unitPrice: it.unitPrice,
-            quantity: it.quantity,
-            itemTotal: it.itemTotal,
-          })),
+        orderStatus: newStatus,
+        statusHistory: {
+          create: {
+            fromStatus: existing.orderStatus,
+            toStatus: newStatus,
+            note: note || `Order status updated to ${newStatus}`,
+          },
         },
       },
       include: {
         deliveryZone: true,
         items: true,
+        statusHistory: {
+          orderBy: { createdAt: 'asc' },
+        },
       },
     });
 
-    return orderRecord;
+    return updated;
   });
-
-  const readableOrderNumber = `ORD-${createdOrder.id}`;
-
-  return {
-    order: {
-      id: createdOrder.id,
-      orderNumber: readableOrderNumber,
-      uuid: createdOrder.uuid,
-      orderStatus: createdOrder.orderStatus,
-      paymentStatus: createdOrder.paymentStatus,
-      paymentMethod: createdOrder.paymentMethod,
-      subtotal: createdOrder.subtotal,
-      deliveryFee: createdOrder.deliveryFee,
-      grandTotal: createdOrder.grandTotal,
-      customerName: createdOrder.customerName,
-      customerPhone: createdOrder.customerPhone,
-      deliveryZone: createdOrder.deliveryZone?.areaName || zone.areaName,
-      deliveryAddress: createdOrder.deliveryAddress,
-      deliveryNotes: createdOrder.deliveryNotes,
-      createdAt: createdOrder.createdAt.toISOString(),
-      items: createdOrder.items.map((it) => ({
-        id: it.id,
-        vegetableId: it.vegetableId,
-        vegetableName: it.vegetableName,
-        vegetableImage: it.vegetableImage,
-        pricePerKg: it.pricePerKg,
-        weightDisplay: it.weightDisplay,
-        weightInKg: it.weightInKg,
-        unitPrice: it.unitPrice,
-        quantity: it.quantity,
-        itemTotal: it.itemTotal,
-      })),
-    },
-  };
 }

@@ -1,7 +1,20 @@
+import './test-env.js';
 import { PrismaClient } from '@prisma/client';
-import { createOrder, OrderValidationError } from '../services/order.service.js';
+import { createOrder as rawCreateOrder, OrderValidationError } from '../services/order.service.js';
 
 const prisma = new PrismaClient();
+
+let ordKeySeq = 1;
+const createOrder = (prismaClient: PrismaClient, input: any, userId?: string | null) => {
+  return rawCreateOrder(
+    prismaClient,
+    {
+      idempotencyKey: input.idempotencyKey || `order-suite-key-${Date.now()}-${ordKeySeq++}-${Math.random().toString(36).substring(2, 7)}`,
+      ...input,
+    },
+    userId
+  );
+};
 
 console.log('--- RUNNING COMPREHENSIVE ORDER CREATION & VALIDATION TESTS ---');
 

@@ -15,7 +15,7 @@ import type { ConfirmedOrder } from './CheckoutPage';
 interface OrderSuccessPageProps {
   order: ConfirmedOrder | null;
   onNavigateShop: () => void;
-  onNavigateTracking?: (orderNumber: string) => void;
+  onNavigateTracking?: (orderNumber: string, uuid?: string) => void;
 }
 
 export const OrderSuccessPage: React.FC<OrderSuccessPageProps> = ({
@@ -206,11 +206,10 @@ export const OrderSuccessPage: React.FC<OrderSuccessPageProps> = ({
           <button
             type="button"
             className="btn btn-outline"
+            id="order-success-track-btn"
             onClick={() => {
               if (onNavigateTracking) {
-                onNavigateTracking(order.orderNumber);
-              } else {
-                alert(`Tracking for order ${order.orderNumber} will be available in the upcoming tracking update!`);
+                onNavigateTracking(order.orderNumber, order.uuid);
               }
             }}
           >

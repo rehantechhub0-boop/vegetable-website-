@@ -2,7 +2,8 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'sabzi_muzaffargarh_secure_jwt_secret_dev_2026_xyz';
+// JWT_SECRET must be provided via environment variable. Production startup in server.ts aborts if missing.
+const JWT_SECRET = process.env.JWT_SECRET || '';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 export interface RegisterDTO {
@@ -24,6 +25,7 @@ export interface UserSanitized {
   phone: string | null;
   role: string;
   createdAt: string;
+  tokenVersion: number;
 }
 
 export class AuthError extends Error {
@@ -35,7 +37,7 @@ export class AuthError extends Error {
   }
 }
 
-export function generateToken(user: { id: string; email: string | null; phone: string | null; name: string; role: string }): string {
+export function generateToken(user: { id: string; email: string | null; phone: string | null; name: string; role: string; tokenVersion: number }): string {
   return jwt.sign(
     {
       id: user.id,
@@ -43,9 +45,10 @@ export function generateToken(user: { id: string; email: string | null; phone: s
       phone: user.phone,
       name: user.name,
       role: user.role,
+      tokenVersion: user.tokenVersion,
     },
     JWT_SECRET,
-    { expiresIn: '7d' }
+    { expiresIn: JWT_EXPIRES_IN as any }
   );
 }
 
@@ -57,6 +60,7 @@ export function sanitizeUser(user: any): UserSanitized {
     phone: user.phone,
     role: user.role,
     createdAt: user.createdAt instanceof Date ? user.createdAt.toISOString() : user.createdAt,
+    tokenVersion: user.tokenVersion ?? 0,
   };
 }
 

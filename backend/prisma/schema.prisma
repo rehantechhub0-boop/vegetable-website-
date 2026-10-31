@@ -15,6 +15,7 @@ model User {
   passwordHash String?
   googleId     String?   @unique
   role         String    @default("CUSTOMER") // CUSTOMER | ADMIN
+  tokenVersion Int       @default(0)          // Incremented on logout to invalidate existing JWTs
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -103,10 +104,14 @@ model Order {
   orderStatus     String        @default("NEW") // NEW | CONFIRMED | PREPARING | OUT_FOR_DELIVERY | DELIVERED | CANCELLED
   whatsappSent    Boolean       @default(false)
 
+  idempotencyKey         String?       @unique
+  idempotencyPayloadHash String?
+
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   items           OrderItem[]
+  statusHistory   OrderStatusHistory[]
 }
 
 model OrderItem {
@@ -125,6 +130,18 @@ model OrderItem {
   unitPrice      Float      @default(0) // Price for one unit of this weight (PKR)
   quantity       Int        @default(1)
   itemTotal      Float
+}
+
+model OrderStatusHistory {
+  id         String   @id @default(uuid())
+  orderId    Int
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus String?  // null for initial status event
+  toStatus   String   // NEW | CONFIRMED | PREPARING | OUT_FOR_DELIVERY | DELIVERED | CANCELLED
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([orderId])
 }
 
 model Setting {

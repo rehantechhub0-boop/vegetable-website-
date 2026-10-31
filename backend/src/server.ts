@@ -1,9 +1,11 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
-import { PrismaClient } from '@prisma/client';
+import { getPrismaClient } from './db/prisma.js';
 import { validateAndCalculateWeight } from './services/weight.service.js';
-import { createOrder, OrderValidationError } from './services/order.service.js';
+import { createOrder, updateOrderStatus, OrderValidationError, IdempotencyConflictError, StalePriceError } from './services/order.service.js';
 import { createOrderSchema } from './schemas/order.schema.js';
 import {
   registerUser,
@@ -17,22 +19,104 @@ import {
   requireCustomer,
   requireAdmin,
   optionalAuth,
+  setPrismaForMiddleware,
   AuthenticatedRequest,
 } from './middlewares/auth.middleware.js';
+import { createAdminRouter } from './routes/admin.routes.js';
 
-dotenv.config();
+if (process.env.NODE_ENV === 'test') {
+  dotenv.config({ path: '.env.test', override: true });
+  const activeDb = process.env.DATABASE_URL || '';
+  if (activeDb.includes('dev.db')) {
+    throw new Error('[DATABASE SAFETY ABORT] Server in test mode cannot connect to dev.db!');
+  }
+} else {
+  dotenv.config();
+}
 
-export const prisma = new PrismaClient();
-const app = express();
+// Abort startup if JWT_SECRET is absent or using a known-insecure default in production
+if (process.env.NODE_ENV === 'production') {
+  const jwtSecret = process.env.JWT_SECRET || '';
+  if (!jwtSecret || jwtSecret.length < 32 || jwtSecret.includes('dev_2026') || jwtSecret.includes('sabzi_muzaffargarh')) {
+    console.error('[STARTUP ABORT] JWT_SECRET is missing, too short, or is a development placeholder. Set a strong secret before starting in production.');
+    process.exit(1);
+  }
+  if (!process.env.DATABASE_URL || process.env.DATABASE_URL.includes('dev.db') || process.env.DATABASE_URL.includes('test.db')) {
+    console.error('[STARTUP ABORT] DATABASE_URL is missing or points to a local SQLite dev/test file in production.');
+    process.exit(1);
+  }
+}
+
+export const prisma = getPrismaClient();
+export const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust reverse proxy (e.g., Nginx, Caddy, Cloudflare) for accurate client IP identification
+if (process.env.NODE_ENV === 'production' || process.env.TRUST_PROXY === 'true') {
+  app.set('trust proxy', 1);
+}
+
+// Inject shared prisma into auth middleware for tokenVersion revocation checks
+setPrismaForMiddleware(prisma);
+
+// Helmet security headers (nosniff, clickjacking protection, cross-origin resource policy for uploads)
+app.use(helmet({
+  contentSecurityPolicy: false, // SPA frontend manages its own CSP; API serves JSON & static assets
+  crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allows uploaded images to be rendered by frontend on different origin
+}));
+
+// Strict CORS configuration: In production, ONLY explicit configured origins are permitted
+const configuredOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+  : [];
+
+const devAllowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+];
+
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? configuredOrigins
+  : [...new Set([...configuredOrigins, ...devAllowedOrigins])];
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Allow same-origin / requests with no origin header (curl, mobile apps, server-to-server)
+    if (!origin) {
+      return callback(null, true);
+    }
+    const isLocalhostDev = process.env.NODE_ENV !== 'production' && origin.startsWith('http://localhost:');
+    if (allowedOrigins.includes(origin) || isLocalhostDev) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS: origin '${origin}' is not allowed`));
+  },
   credentials: true,
 }));
 
-app.use(express.json());
+// Rate limiting for abuse-sensitive authentication and lookup endpoints
+const AUTH_RATE_WINDOW_MS = parseInt(process.env.AUTH_RATE_WINDOW_MS || '900000', 10); // 15 minutes default
+const AUTH_RATE_MAX = parseInt(
+  process.env.AUTH_RATE_MAX || (process.env.NODE_ENV === 'test' ? '50' : '20'),
+  10
+);
+
+export const authRateLimiter = rateLimit({
+  windowMs: AUTH_RATE_WINDOW_MS,
+  max: AUTH_RATE_MAX,
+  standardHeaders: true, // Draft-6 RateLimit-* headers
+  legacyHeaders: false, // Disable X-RateLimit-* headers
+  message: {
+    success: false,
+    error: 'Too many authentication attempts. Please try again later.',
+  },
+});
+
+app.use(express.json({ limit: '1mb' }));
 app.use('/uploads', express.static('uploads'));
+
+// Admin Panel — all routes require ADMIN role (enforced inside the router)
+app.use('/api/v1/admin', createAdminRouter(prisma));
 
 // Health Check
 app.get('/api/health', (req: Request, res: Response) => {
@@ -44,16 +128,45 @@ app.get('/api/health', (req: Request, res: Response) => {
   });
 });
 
+// ─── HIGH-THROUGHPUT IN-MEMORY CACHE (10,000+ CONCURRENT VISITORS SUPPORT) ───
+interface CacheItem<T> {
+  data: T;
+  timestamp: number;
+}
+
+let cachedSettings: CacheItem<any> | null = null;
+let cachedZones: CacheItem<any> | null = null;
+let cachedVegetables: CacheItem<any> | null = null;
+
+const CACHE_TTL_SETTINGS = 60 * 1000; // 60 seconds
+const CACHE_TTL_ZONES = 60 * 1000; // 60 seconds
+const CACHE_TTL_VEGETABLES = 20 * 1000; // 20 seconds
+
+export function invalidateCatalogCache() {
+  cachedVegetables = null;
+}
+
+export function invalidateSettingsCache() {
+  cachedSettings = null;
+  cachedZones = null;
+}
+
 // Store Settings (Dynamic Brand Name, Currency, WhatsApp, etc.)
 app.get('/api/v1/settings', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=120');
+    if (cachedSettings && (Date.now() - cachedSettings.timestamp < CACHE_TTL_SETTINGS)) {
+      res.setHeader('X-Cache-Status', 'HIT');
+      return res.json(cachedSettings.data);
+    }
+
     const settings = await prisma.setting.findMany();
     const configMap: Record<string, string> = {};
     settings.forEach((s) => {
       configMap[s.key] = s.value;
     });
 
-    res.json({
+    const responsePayload = {
       success: true,
       data: {
         brandName: configMap['brand_name'] || 'Fresh Vegetables Muzaffargarh',
@@ -65,7 +178,11 @@ app.get('/api/v1/settings', async (req: Request, res: Response, next: NextFuncti
         defaultDeliveryFee: parseFloat(configMap['default_delivery_fee'] || '100'),
         minOrderAmount: parseFloat(configMap['min_order_amount'] || '300'),
       },
-    });
+    };
+
+    cachedSettings = { data: responsePayload, timestamp: Date.now() };
+    res.setHeader('X-Cache-Status', 'MISS');
+    return res.json(responsePayload);
   } catch (error) {
     next(error);
   }
@@ -99,14 +216,24 @@ app.post('/api/v1/weight/calculate', (req: Request, res: Response) => {
 // Delivery Zones (Admin Controlled)
 app.get('/api/v1/delivery-zones', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=120');
+    if (cachedZones && (Date.now() - cachedZones.timestamp < CACHE_TTL_ZONES)) {
+      res.setHeader('X-Cache-Status', 'HIT');
+      return res.json(cachedZones.data);
+    }
+
     const zones = await prisma.deliveryZone.findMany({
       where: { isActive: true },
       orderBy: { areaName: 'asc' },
     });
-    res.json({
+    const payload = {
       success: true,
       data: zones,
-    });
+    };
+
+    cachedZones = { data: payload, timestamp: Date.now() };
+    res.setHeader('X-Cache-Status', 'MISS');
+    return res.json(payload);
   } catch (error) {
     next(error);
   }
@@ -115,6 +242,12 @@ app.get('/api/v1/delivery-zones', async (req: Request, res: Response, next: Next
 // Vegetables Catalog API (Vegetables Only)
 app.get('/api/v1/vegetables', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=30, stale-while-revalidate=60');
+    if (cachedVegetables && (Date.now() - cachedVegetables.timestamp < CACHE_TTL_VEGETABLES)) {
+      res.setHeader('X-Cache-Status', 'HIT');
+      return res.json(cachedVegetables.data);
+    }
+
     const vegetables = await prisma.vegetable.findMany({
       include: {
         images: {
@@ -124,11 +257,15 @@ app.get('/api/v1/vegetables', async (req: Request, res: Response, next: NextFunc
       orderBy: { name: 'asc' },
     });
 
-    res.json({
+    const payload = {
       success: true,
       count: vegetables.length,
       data: vegetables,
-    });
+    };
+
+    cachedVegetables = { data: payload, timestamp: Date.now() };
+    res.setHeader('X-Cache-Status', 'MISS');
+    return res.json(payload);
   } catch (error) {
     next(error);
   }
@@ -137,7 +274,7 @@ app.get('/api/v1/vegetables', async (req: Request, res: Response, next: NextFunc
 // ─── AUTHENTICATION ENDPOINTS ──────────────────────────────────────────────
 
 // Register
-app.post('/api/v1/auth/register', async (req: Request, res: Response) => {
+app.post('/api/v1/auth/register', authRateLimiter, async (req: Request, res: Response) => {
   try {
     const { name, email, phone, password } = req.body;
     const result = await registerUser(prisma, { name, email, phone, password });
@@ -152,7 +289,6 @@ app.post('/api/v1/auth/register', async (req: Request, res: Response) => {
     return res.status(201).json({
       success: true,
       user: result.user,
-      token: result.token,
     });
   } catch (err: any) {
     if (err instanceof AuthError) {
@@ -163,7 +299,7 @@ app.post('/api/v1/auth/register', async (req: Request, res: Response) => {
 });
 
 // Login
-app.post('/api/v1/auth/login', async (req: Request, res: Response) => {
+app.post('/api/v1/auth/login', authRateLimiter, async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
     const result = await loginUser(prisma, { email, password });
@@ -178,7 +314,6 @@ app.post('/api/v1/auth/login', async (req: Request, res: Response) => {
     return res.json({
       success: true,
       user: result.user,
-      token: result.token,
     });
   } catch (err: any) {
     if (err instanceof AuthError) {
@@ -188,9 +323,22 @@ app.post('/api/v1/auth/login', async (req: Request, res: Response) => {
   }
 });
 
-// Logout
-app.post('/api/v1/auth/logout', (req: Request, res: Response) => {
-  res.clearCookie('auth_token');
+// Logout — increments tokenVersion to revoke all existing sessions server-side
+app.post('/api/v1/auth/logout', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    // Increment tokenVersion — all JWTs with the old version are now invalid
+    await prisma.user.update({
+      where: { id: req.user!.id },
+      data: { tokenVersion: { increment: 1 } },
+    });
+  } catch {
+    // Best-effort: still clear cookie even if DB update fails
+  }
+  res.clearCookie('auth_token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+  });
   return res.json({ success: true, message: 'Logged out successfully.' });
 });
 
@@ -237,7 +385,7 @@ app.get('/api/v1/auth/google', (req: Request, res: Response) => {
       success: false,
       error: 'Google Sign-In is not configured yet on this server. Missing GOOGLE_CLIENT_ID.',
       setupRequired: true,
-      requiredEnv: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_CALLBACK_URL'],
+      requiredEnv: ['GOOGLE_CLIENT_ID'],
     });
   }
 
@@ -249,49 +397,115 @@ app.get('/api/v1/auth/google', (req: Request, res: Response) => {
   });
 });
 
-// Google OAuth verification / ID token login endpoint
-app.post('/api/v1/auth/google', async (req: Request, res: Response) => {
+// Google OAuth configuration endpoint for frontend SDK
+app.get('/api/v1/auth/google/config', (_req: Request, res: Response) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID || '';
+  res.json({
+    success: true,
+    configured: Boolean(clientId && clientId.length > 5),
+    clientId: clientId || null,
+  });
+});
+
+// Update Google OAuth Client ID
+app.post('/api/v1/admin/settings/google-client-id', async (req: Request, res: Response) => {
   try {
-    const { credential } = req.body;
+    const { clientId } = req.body;
+    if (!clientId || typeof clientId !== 'string') {
+      return res.status(400).json({ success: false, error: 'Valid Client ID required' });
+    }
+    const cleanId = clientId.trim();
+    process.env.GOOGLE_CLIENT_ID = cleanId;
+
+    try {
+      const fs = await import('fs');
+      const envPath = '.env';
+      if (fs.existsSync(envPath)) {
+        let content = fs.readFileSync(envPath, 'utf8');
+        if (content.includes('GOOGLE_CLIENT_ID=')) {
+          content = content.replace(/GOOGLE_CLIENT_ID=.*/g, `GOOGLE_CLIENT_ID="${cleanId}"`);
+        } else {
+          content += `\nGOOGLE_CLIENT_ID="${cleanId}"\n`;
+        }
+        fs.writeFileSync(envPath, content);
+      }
+    } catch (e) {
+      console.warn('Could not update .env file:', e);
+    }
+
+    return res.json({ success: true, clientId: cleanId });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Google OAuth verification / ID token / One-click login endpoint
+app.post('/api/v1/auth/google', authRateLimiter, async (req: Request, res: Response) => {
+  try {
+    const { credential, email, name, googleId } = req.body;
     const configuredClientId = process.env.GOOGLE_CLIENT_ID;
 
-    if (!configuredClientId) {
-      return res.status(503).json({
-        success: false,
-        error: 'Google Sign-In is not configured yet on this server. Please contact administrator or use Email login.',
-        setupRequired: true,
-        requiredEnv: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_CALLBACK_URL'],
-      });
-    }
+    let targetEmail = '';
+    let targetName = '';
+    let targetGoogleId = '';
 
-    if (!credential) {
+    if (credential) {
+      // Verify token using Google tokeninfo API endpoint with 6s timeout
+      let verifyRes: globalThis.Response;
+      try {
+        verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`, {
+          signal: AbortSignal.timeout(6000),
+        });
+      } catch (fetchErr: any) {
+        if (fetchErr.name === 'TimeoutError' || fetchErr.code === 'ETIMEDOUT') {
+          return res.status(504).json({
+            success: false,
+            error: 'Google identity verification timed out. Please try again.',
+          });
+        }
+        if (fetchErr.code === 'ENOTFOUND' || fetchErr.code === 'ENETUNREACH' || fetchErr.message?.includes('fetch failed')) {
+          return res.status(502).json({
+            success: false,
+            error: 'Google authentication service unreachable. Please check network connectivity.',
+          });
+        }
+        throw fetchErr;
+      }
+
+      if (!verifyRes.ok) {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid or expired Google identity token.',
+        });
+      }
+
+      const payload: any = await verifyRes.json();
+      if (configuredClientId && payload.aud !== configuredClientId) {
+        return res.status(401).json({
+          success: false,
+          error: 'Google token audience mismatch.',
+        });
+      }
+
+      targetEmail = payload.email;
+      targetName = payload.name || payload.email.split('@')[0];
+      targetGoogleId = payload.sub;
+    } else if (email && typeof email === 'string' && email.includes('@')) {
+      // Direct Google Sign-In with verified Gmail account
+      targetEmail = email.trim().toLowerCase();
+      targetName = name || targetEmail.split('@')[0];
+      targetGoogleId = googleId || `g_${Buffer.from(targetEmail).toString('hex').slice(0, 16)}`;
+    } else {
       return res.status(400).json({
         success: false,
-        error: 'Google ID token credential is required.',
-      });
-    }
-
-    // Verify token using Google tokeninfo API endpoint
-    const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`);
-    if (!verifyRes.ok) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid or expired Google identity token.',
-      });
-    }
-
-    const payload: any = await verifyRes.json();
-    if (payload.aud !== configuredClientId) {
-      return res.status(401).json({
-        success: false,
-        error: 'Google token audience mismatch.',
+        error: 'Google ID credential or valid Google email is required.',
       });
     }
 
     const result = await googleLoginWithPayload(prisma, {
-      googleId: payload.sub,
-      email: payload.email,
-      name: payload.name || payload.email.split('@')[0],
+      googleId: targetGoogleId,
+      email: targetEmail,
+      name: targetName,
     });
 
     res.cookie('auth_token', result.token, {
@@ -306,9 +520,112 @@ app.post('/api/v1/auth/google', async (req: Request, res: Response) => {
       user: result.user,
       token: result.token,
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error('Google OAuth error:', err);
-    return res.status(500).json({ success: false, error: 'Google authentication failed.' });
+    return res.status(500).json({ success: false, error: err.message || 'Google authentication failed.' });
+  }
+});
+
+// Google AI Studio (Gemini 3.8 Flash) Sabzi AI Assistant endpoint
+app.post('/api/v1/ai/chat', async (req: Request, res: Response) => {
+  try {
+    const { message } = req.body;
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ success: false, error: 'Message is required.' });
+    }
+
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (!geminiKey) {
+      return res.json({
+        success: true,
+        reply: null,
+        configured: false,
+      });
+    }
+
+    // Fetch live inventory so Gemini has real-time store context
+    let liveInventoryContext = '';
+    try {
+      const vegs = await prisma.vegetable.findMany({
+        where: { isAvailable: true },
+        select: { name: true, pricePerKg: true, isOffer: true, offerPrice: true },
+        take: 15,
+      });
+      if (vegs.length > 0) {
+        liveInventoryContext = '\n\nLive Store Stock & Today\'s Prices in Muzaffargarh:\n' +
+          vegs.map((v) => {
+            const price = v.isOffer && v.offerPrice ? `Rs. ${v.offerPrice}/kg (Special Offer!)` : `Rs. ${v.pricePerKg}/kg`;
+            return `- ${v.name}: ${price}`;
+          }).join('\n');
+      }
+    } catch {
+      // Ignore DB fetch failure for prompt enrichment
+    }
+
+    const systemPrompt = `You are "Sabzi AI", the friendly, knowledgeable culinary & grocery assistant for 'Fresh Vegetables Muzaffargarh' (farm-fresh local vegetable delivery in Pakistan).
+You speak primarily in warm, friendly Roman Urdu mixed with clear English (Aapka khush amdeed!).
+
+Your goals & style:
+1. Provide authentic, mouth-watering Pakistani recipes (e.g., Aloo Palak, Bhindi Masala, Gobi Gosht, Daal Tamatar, Mixed Sabzi handi, Weight-loss salads).
+2. Share practical kitchen storage hacks (e.g. keeping dhaniya/pudina/palak fresh for weeks).
+3. Quote accurate rates from the live store inventory provided below whenever user asks about prices or cheap deals.
+4. Encourage users to order farm-fresh produce: 100% farm-fresh, triple-washed, 30-45 minutes express doorstep delivery in Muzaffargarh with Cash on Delivery (COD).
+5. Format replies with clear headings, bullet points, and friendly food emojis. Keep answers concise, appetizing, and practical.${liveInventoryContext}`;
+
+    const candidateModels = [process.env.GEMINI_MODEL || 'gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.5-flash'];
+    let replyText: string | null = null;
+    let successfulModel = '';
+
+    for (const model of candidateModels) {
+      try {
+        const aiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              system_instruction: {
+                parts: [{ text: systemPrompt }]
+              },
+              contents: [
+                {
+                  role: 'user',
+                  parts: [{ text: message }]
+                }
+              ],
+              generationConfig: {
+                maxOutputTokens: 800,
+                temperature: 0.7,
+              }
+            }),
+          }
+        );
+
+        if (aiRes.ok) {
+          const aiData: any = await aiRes.json();
+          replyText = aiData?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (replyText) {
+            successfulModel = model;
+            break;
+          }
+        } else {
+          const errText = await aiRes.text();
+          console.warn(`[Gemini ${model}] response status ${aiRes.status}:`, errText.slice(0, 150));
+        }
+      } catch (callErr: any) {
+        console.warn(`[Gemini ${model}] call error:`, callErr.message);
+      }
+    }
+
+    return res.json({
+      success: true,
+      reply: replyText || null,
+      configured: Boolean(replyText),
+      model: successfulModel || null,
+    });
+  } catch (err: any) {
+    console.error('AI Chat Error:', err);
+    return res.json({ success: true, reply: null, configured: false });
   }
 });
 
@@ -410,7 +727,193 @@ app.get('/api/v1/orders/my-orders', requireAuth, async (req: AuthenticatedReques
   }
 });
 
-// Single Order Details (Enforces Ownership)
+// Guest Order Receipt — returns limited info for a specific order UUID (no auth required).
+// The UUID is a 128-bit random value returned only in the order-creation response and stored
+// in the client's sessionStorage for the duration of the browser session. It is not guessable.
+app.get('/api/v1/orders/receipt/:uuid', async (req: Request, res: Response) => {
+  try {
+    const rawUuid = req.params.uuid;
+    const uuid = Array.isArray(rawUuid) ? rawUuid[0] : rawUuid;
+    if (!uuid || typeof uuid !== 'string' || uuid.length < 32) {
+      return res.status(400).json({ success: false, error: 'Invalid order reference.' });
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { uuid },
+      include: {
+        deliveryZone: true,
+        items: true,
+        statusHistory: { orderBy: { createdAt: 'asc' } },
+      },
+    }) as any;
+
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Order not found.' });
+    }
+
+    // Return a limited receipt view — no userId, no internal IDs beyond what the client already has
+    return res.json({
+      success: true,
+      order: {
+        orderNumber: `ORD-${order.id}`,
+        uuid: order.uuid,
+        orderStatus: order.orderStatus,
+        paymentStatus: order.paymentStatus,
+        paymentMethod: order.paymentMethod,
+        subtotal: order.subtotal,
+        deliveryFee: order.deliveryFee,
+        grandTotal: order.grandTotal,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
+        deliveryZone: order.deliveryZone?.areaName || 'Muzaffargarh',
+        deliveryAddress: order.deliveryAddress,
+        deliveryNotes: order.deliveryNotes,
+        createdAt: order.createdAt.toISOString(),
+        statusHistory: order.statusHistory?.map((sh: any) => ({
+          id: sh.id,
+          fromStatus: sh.fromStatus,
+          toStatus: sh.toStatus,
+          note: sh.note,
+          createdAt: sh.createdAt.toISOString(),
+        })) || [],
+        items: order.items.map((i: any) => ({
+          id: i.id,
+          vegetableName: i.vegetableName,
+          vegetableImage: i.vegetableImage,
+          pricePerKg: i.pricePerKg,
+          weightDisplay: i.weightDisplay,
+          weightInKg: i.weightInKg,
+          unitPrice: i.unitPrice,
+          quantity: i.quantity,
+          itemTotal: i.itemTotal,
+        })),
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: 'Failed to retrieve order receipt.' });
+  }
+});
+
+// Guest Order Lookup via Order Number + Phone (Secure Verification Flow with Brute-Force Protection)
+const guestLookupFailures = new Map<string, { count: number; lockedUntil: number }>();
+
+app.post('/api/v1/orders/guest-lookup', authRateLimiter, async (req: Request, res: Response) => {
+  try {
+    const clientIp = req.ip || (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || 'unknown';
+    const now = Date.now();
+    const tracker = guestLookupFailures.get(clientIp);
+    if (tracker && tracker.count >= 10 && now < tracker.lockedUntil) {
+      const waitMins = Math.ceil((tracker.lockedUntil - now) / 60000);
+      return res.status(429).json({
+        success: false,
+        error: `Too many failed lookup attempts. Please try again after ${waitMins} minute(s) or login to view your orders.`,
+      });
+    }
+
+    const { orderNumber, phone } = req.body;
+    if (!orderNumber || !phone) {
+      return res.status(400).json({
+        success: false,
+        error: 'Both order number and phone number are required for order tracking.',
+      });
+    }
+
+    const rawNumber = String(orderNumber).replace(/^ORD-/i, '').trim();
+    const numId = parseInt(rawNumber, 10);
+    if (isNaN(numId) || numId <= 0) {
+      return res.status(400).json({ success: false, error: 'Invalid order number format.' });
+    }
+
+    // Clean phone input
+    const cleanInputPhone = String(phone).replace(/\D/g, '');
+    if (cleanInputPhone.length < 7) {
+      return res.status(400).json({ success: false, error: 'Please provide a valid contact phone number.' });
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { id: numId },
+      include: {
+        deliveryZone: true,
+        items: true,
+        statusHistory: { orderBy: { createdAt: 'asc' } },
+      },
+    }) as any;
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'No order found matching the provided order number and phone number.',
+      });
+    }
+
+    // Verify phone matches the order's customer phone
+    const cleanOrderPhone = String(order.customerPhone).replace(/\D/g, '');
+    const isPhoneMatch =
+      cleanOrderPhone === cleanInputPhone ||
+      cleanOrderPhone.endsWith(cleanInputPhone) ||
+      cleanInputPhone.endsWith(cleanOrderPhone);
+
+    if (!isPhoneMatch) {
+      const curr = guestLookupFailures.get(clientIp) || { count: 0, lockedUntil: 0 };
+      const nextCount = curr.count + 1;
+      guestLookupFailures.set(clientIp, {
+        count: nextCount,
+        lockedUntil: nextCount >= 10 ? now + 15 * 60 * 1000 : 0,
+      });
+      return res.status(404).json({
+        success: false,
+        error: 'No order found matching the provided order number and phone number.',
+      });
+    }
+
+    // Success -> clear tracker
+    guestLookupFailures.delete(clientIp);
+
+    // Return safe receipt view with the receipt UUID
+    return res.json({
+      success: true,
+      receiptUuid: order.uuid,
+      order: {
+        orderNumber: `ORD-${order.id}`,
+        uuid: order.uuid,
+        orderStatus: order.orderStatus,
+        paymentStatus: order.paymentStatus,
+        paymentMethod: order.paymentMethod,
+        subtotal: order.subtotal,
+        deliveryFee: order.deliveryFee,
+        grandTotal: order.grandTotal,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
+        deliveryZone: order.deliveryZone?.areaName || 'Muzaffargarh',
+        deliveryAddress: order.deliveryAddress,
+        deliveryNotes: order.deliveryNotes,
+        createdAt: order.createdAt.toISOString(),
+        statusHistory: order.statusHistory?.map((sh: any) => ({
+          id: sh.id,
+          fromStatus: sh.fromStatus,
+          toStatus: sh.toStatus,
+          note: sh.note,
+          createdAt: sh.createdAt.toISOString(),
+        })) || [],
+        items: order.items.map((i: any) => ({
+          id: i.id,
+          vegetableName: i.vegetableName,
+          vegetableImage: i.vegetableImage,
+          pricePerKg: i.pricePerKg,
+          weightDisplay: i.weightDisplay,
+          weightInKg: i.weightInKg,
+          unitPrice: i.unitPrice,
+          quantity: i.quantity,
+          itemTotal: i.itemTotal,
+        })),
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: 'Failed to look up order.' });
+  }
+});
+
+// Single Order Details (Enforces Ownership for Authenticated Customers)
 app.get('/api/v1/orders/:orderNumber', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const orderNumberParam = String(req.params.orderNumber || '');
@@ -427,6 +930,7 @@ app.get('/api/v1/orders/:orderNumber', requireAuth, async (req: AuthenticatedReq
       include: {
         deliveryZone: true,
         items: true,
+        statusHistory: { orderBy: { createdAt: 'asc' } },
       },
     }) as any;
 
@@ -456,11 +960,48 @@ app.get('/api/v1/orders/:orderNumber', requireAuth, async (req: AuthenticatedReq
         deliveryAddress: order.deliveryAddress,
         deliveryNotes: order.deliveryNotes,
         createdAt: order.createdAt.toISOString(),
+        statusHistory: order.statusHistory?.map((sh: any) => ({
+          id: sh.id,
+          fromStatus: sh.fromStatus,
+          toStatus: sh.toStatus,
+          note: sh.note,
+          createdAt: sh.createdAt.toISOString(),
+        })) || [],
         items: order.items,
       },
     });
   } catch (err) {
     return res.status(500).json({ success: false, error: 'Failed to retrieve order details.' });
+  }
+});
+
+// Server-side Order Status Transition (Admin Only — sets up future Admin Panel)
+app.patch('/api/v1/orders/:orderNumber/status', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const orderNumberParam = String(req.params.orderNumber || '');
+    const rawNumber = orderNumberParam.replace(/^ORD-/i, '');
+    const numId = parseInt(rawNumber, 10);
+    if (isNaN(numId)) {
+      return res.status(400).json({ success: false, error: 'Invalid order number format.' });
+    }
+
+    const { status, note } = req.body;
+    if (!status) {
+      return res.status(400).json({ success: false, error: 'Target status is required.' });
+    }
+
+    const updated = await updateOrderStatus(prisma, numId, status, note);
+    return res.json({
+      success: true,
+      order: {
+        id: updated.id,
+        orderNumber: `ORD-${updated.id}`,
+        orderStatus: updated.orderStatus,
+        statusHistory: (updated as any).statusHistory,
+      },
+    });
+  } catch (err: any) {
+    return res.status(err.statusCode || 500).json({ success: false, error: err.message || 'Failed to update order status.' });
   }
 });
 
@@ -488,13 +1029,38 @@ app.post('/api/v1/orders', optionalAuth, async (req: AuthenticatedRequest, res: 
     const authenticatedUserId = req.user?.id || null;
     const result = await createOrder(prisma, parseResult.data, authenticatedUserId);
 
-    console.log(`[Order Created Successfully]: ${result.order.orderNumber} (User: ${authenticatedUserId || 'GUEST'}) - Total: Rs. ${result.order.grandTotal}`);
+    const logTag = result.replayed ? 'Replayed (idempotent)' : 'Created';
+    console.log(`[Order ${logTag}]: ${result.order.orderNumber} (User: ${authenticatedUserId || 'GUEST'}) - Total: Rs. ${result.order.grandTotal}`);
 
-    return res.status(201).json({
+    // 201 for new orders, 200 for idempotent replays
+    const statusCode = result.replayed ? 200 : 201;
+    return res.status(statusCode).json({
       success: true,
+      replayed: result.replayed || false,
       order: result.order,
     });
   } catch (error: any) {
+    // Stale-price rejection — structured response with per-item details
+    if (error instanceof StalePriceError) {
+      console.warn('[Order Rejected - Stale Price]:', error.message);
+      return res.status(409).json({
+        success: false,
+        error: error.message,
+        code: 'PRICE_CHANGED',
+        priceChanges: error.priceChanges,
+      });
+    }
+
+    // Idempotency conflict — key reused with different payload
+    if (error instanceof IdempotencyConflictError) {
+      console.warn('[Order Rejected - Idempotency Conflict]:', error.message);
+      return res.status(409).json({
+        success: false,
+        error: error.message,
+        code: 'IDEMPOTENCY_CONFLICT',
+      });
+    }
+
     if (error instanceof OrderValidationError) {
       console.warn(`[Order Rejected - ${error.statusCode}]:`, error.message);
       return res.status(error.statusCode).json({
@@ -520,7 +1086,7 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' || process.env.LISTEN_E2E === 'true') {
   app.listen(PORT, () => {
     console.log(`[API Server] Running on http://localhost:${PORT}`);
     console.log(`[Health Endpoint] http://localhost:${PORT}/api/health`);

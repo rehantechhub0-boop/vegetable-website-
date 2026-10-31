@@ -11,6 +11,7 @@ import {
   Calendar,
   Scale,
   ArrowLeft,
+  Truck,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
@@ -46,15 +47,17 @@ export interface CustomerOrderSummary {
 interface AccountPageProps {
   onNavigateShop: () => void;
   onNavigateHome: () => void;
+  onNavigateTrackOrder?: (orderNumber: string) => void;
   activeOrderNumber?: string | null;
 }
 
 export const AccountPage: React.FC<AccountPageProps> = ({
   onNavigateShop,
   onNavigateHome,
+  onNavigateTrackOrder,
   activeOrderNumber,
 }) => {
-  const { user, token, logout, setUser } = useAuthStore();
+  const { user, logout, setUser } = useAuthStore();
 
   const [activeTab, setActiveTab] = useState<'orders' | 'profile'>('orders');
   const [orders, setOrders] = useState<CustomerOrderSummary[]>([]);
@@ -79,11 +82,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({
       setLoadingOrders(true);
       setOrdersError(null);
       try {
-        const headers: Record<string, string> = {};
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-
         const res = await fetch('/api/v1/orders/my-orders', {
-          headers,
           credentials: 'include',
         });
 
@@ -101,7 +100,6 @@ export const AccountPage: React.FC<AccountPageProps> = ({
                 // Fetch direct order to enforce backend ownership verification
                 try {
                   const singleRes = await fetch(`/api/v1/orders/${encodeURIComponent(activeOrderNumber)}`, {
-                    headers,
                     credentials: 'include',
                   });
                   const singleData = await singleRes.json();
@@ -132,7 +130,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({
     return () => {
       mounted = false;
     };
-  }, [user, token, activeOrderNumber]);
+  }, [user, activeOrderNumber]);
 
   // Load default address if available
   useEffect(() => {
@@ -148,12 +146,9 @@ export const AccountPage: React.FC<AccountPageProps> = ({
     setSavingProfile(true);
 
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
       const res = await fetch('/api/v1/profile', {
         method: 'PATCH',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, phone, address }),
         credentials: 'include',
       });
@@ -259,8 +254,19 @@ export const AccountPage: React.FC<AccountPageProps> = ({
                       {new Date(selectedOrder.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
-                  <div className="account-detail-status-pill">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                     <span className="badge badge-fresh">{selectedOrder.orderStatus}</span>
+                    {onNavigateTrackOrder && (
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
+                        onClick={() => onNavigateTrackOrder(selectedOrder.orderNumber)}
+                      >
+                        <Truck size={14} />
+                        Track Live Progress
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -383,11 +389,26 @@ export const AccountPage: React.FC<AccountPageProps> = ({
                         <span>•</span>
                         <span>{o.deliveryZone}</span>
                         <span>•</span>
-                        <span>{o.paymentMethod}</span>
+                        <span>Payment: {o.paymentStatus || 'COD'}</span>
                       </div>
                       <div className="account-order-action-wrap">
                         <span className="account-order-price">Rs. {o.grandTotal.toLocaleString()}</span>
-                        <ChevronRight size={18} className="account-order-arrow" />
+                        {onNavigateTrackOrder ? (
+                          <button
+                            type="button"
+                            className="btn btn-outline"
+                            style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onNavigateTrackOrder(o.orderNumber);
+                            }}
+                          >
+                            <Truck size={13} />
+                            Track
+                          </button>
+                        ) : (
+                          <ChevronRight size={18} className="account-order-arrow" />
+                        )}
                       </div>
                     </div>
                   </article>

@@ -1,3 +1,4 @@
+import './test-env.js';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -148,7 +149,8 @@ async function runAuthTests() {
     // ────────────────────────────────────────────────────────────────
     // TEST 8: Logout
     // ────────────────────────────────────────────────────────────────
-    // Logout clears HTTP-only cookie and removes client state
+    // Logout endpoint now requires auth; it increments tokenVersion in DB.
+    // This test verifies the cookie is cleared in the response header.
     let clearedCookie = '';
     const fakeLogoutRes: any = {
       clearCookie: (name: string) => {
@@ -183,6 +185,7 @@ async function runAuthTests() {
     const orderA = await createOrder(
       prisma,
       {
+        idempotencyKey: `auth-test-order-a-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         customer: { name: 'Customer One', phone: '03001234567' },
         delivery: { zoneId: zone.id, address: 'Customer One House, City' },
         paymentMethod: 'COD',
@@ -231,9 +234,10 @@ async function runAuthTests() {
     // ────────────────────────────────────────────────────────────────
     // TEST 12: Customer cannot access admin-only functionality
     // ────────────────────────────────────────────────────────────────
+    // Use cookie header format (Bearer header support has been removed)
     let adminDenied: boolean = false;
     const customerReqFake: any = {
-      headers: { authorization: `Bearer ${loginResult.token}` },
+      headers: { cookie: `auth_token=${encodeURIComponent(loginResult.token)}` },
     };
     const adminResFake: any = {
       status: (code: number) => {
@@ -255,6 +259,7 @@ async function runAuthTests() {
     const guestOrderResult = await createOrder(
       prisma,
       {
+        idempotencyKey: `auth-test-guest-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         customer: { name: 'Walk-in Guest', phone: '03009876543' },
         delivery: { zoneId: zone.id, address: 'Guest Bazaar Road' },
         paymentMethod: 'COD',
@@ -291,9 +296,10 @@ async function runAuthTests() {
     // ────────────────────────────────────────────────────────────────
     // TEST 16: Invalid/expired authentication rejected
     // ────────────────────────────────────────────────────────────────
+    // Use cookie format — Bearer header is no longer checked
     let invalidTokenRejected: boolean = false;
     const badTokenReq: any = {
-      headers: { authorization: 'Bearer invalid.tampered.token.here' },
+      headers: { cookie: 'auth_token=invalid.tampered.token.here' },
     };
     const badTokenRes: any = {
       status: (code: number) => {
