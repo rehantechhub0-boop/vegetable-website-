@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Leaf, AlertCircle, ArrowLeft, Lock, Mail, User, Phone } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { GenuineGoogleButton } from '../components/GenuineGoogleButton';
+import { GoogleSignInModal } from '../components/GoogleSignInModal';
 
 interface RegisterPageProps {
   onNavigateHome: () => void;
@@ -22,6 +23,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
   
   const setUser = useAuthStore((s) => s.setUser);
 
@@ -109,8 +111,12 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
           {/* Genuine Google Identity Services Button */}
           <GenuineGoogleButton
             onSuccess={onSuccess}
-            onError={(errMsg) => setError(errMsg)}
-                      />
+            onError={(errMsg) => {
+              setError(errMsg);
+              setShowGoogleModal(true);
+            }}
+            onOpenFallbackModal={() => setShowGoogleModal(true)}
+          />
 
           <div className="auth-divider">
             <span>or register with email</span>
@@ -229,6 +235,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
           </div>
         </div>
       </div>
+      <GoogleSignInModal isOpen={showGoogleModal} onClose={() => setShowGoogleModal(false)} onSuccess={onSuccess} />
     </main>
   );
 };

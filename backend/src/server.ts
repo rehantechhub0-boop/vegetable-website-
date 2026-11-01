@@ -91,6 +91,8 @@ app.use(cors({
     return callback(null, true);
   },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
 }));
 
 // Automatic database initialization middleware
@@ -120,9 +122,9 @@ app.get('/', (req: Request, res: Response) => {
 });
 
 // Rate limiting for abuse-sensitive authentication and lookup endpoints
-const AUTH_RATE_WINDOW_MS = parseInt(process.env.AUTH_RATE_WINDOW_MS || '900000', 10); // 15 minutes default
+const AUTH_RATE_WINDOW_MS = parseInt(process.env.AUTH_RATE_WINDOW_MS || '600000', 10); // 10 minutes default
 const AUTH_RATE_MAX = parseInt(
-  process.env.AUTH_RATE_MAX || (process.env.NODE_ENV === 'test' ? '50' : '20'),
+  process.env.AUTH_RATE_MAX || (process.env.NODE_ENV === 'test' ? '150' : '120'),
   10
 );
 
@@ -131,9 +133,10 @@ export const authRateLimiter = rateLimit({
   max: AUTH_RATE_MAX,
   standardHeaders: true, // Draft-6 RateLimit-* headers
   legacyHeaders: false, // Disable X-RateLimit-* headers
+  skipSuccessfulRequests: true, // Only failed authentication attempts consume rate limit quota
   message: {
     success: false,
-    error: 'Too many authentication attempts. Please try again later.',
+    error: 'Too many failed authentication attempts. Please wait a few moments and try again.',
   },
 });
 

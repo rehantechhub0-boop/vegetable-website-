@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Leaf, AlertCircle, ArrowRight, Lock, Mail, ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { GenuineGoogleButton } from '../components/GenuineGoogleButton';
+import { GoogleSignInModal } from '../components/GoogleSignInModal';
 
 interface LoginPageProps {
   onNavigateHome: () => void;
@@ -20,6 +21,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [googleNotice, setGoogleNotice] = useState<string | null>(null);
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
 
   const setUser = useAuthStore((s) => s.setUser);
 
@@ -98,7 +100,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           {/* Genuine Google Identity Services Button */}
           <GenuineGoogleButton
             onSuccess={onSuccess}
-            onError={(errMsg) => setError(errMsg)}
+            onError={(errMsg) => {
+              setError(errMsg);
+              setShowGoogleModal(true);
+            }}
+            onOpenFallbackModal={() => setShowGoogleModal(true)}
           />
 
           <div className="auth-divider">
@@ -176,6 +182,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           </div>
         </div>
       </div>
+
+      <GoogleSignInModal
+        isOpen={showGoogleModal}
+        onClose={() => setShowGoogleModal(false)}
+        onSuccess={onSuccess}
+      />
     </main>
   );
 };

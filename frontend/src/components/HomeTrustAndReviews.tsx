@@ -187,10 +187,11 @@ export const HomeTrustAndReviews: React.FC<HomeTrustAndReviewsProps> = ({
   ];
 
   return (
-    <div style={{ padding: '3.5rem 0', display: 'flex', flexDirection: 'column', gap: '3.5rem' }}>
+    <div className="home-trust-reviews-wrap" style={{ padding: '3.5rem 0', display: 'flex', flexDirection: 'column', gap: '3.5rem' }}>
       {/* ── 4 TRUST PILLARS ── */}
       <section className="container scroll-reveal-item">
         <div
+          className="trust-pillars-grid"
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
@@ -200,6 +201,7 @@ export const HomeTrustAndReviews: React.FC<HomeTrustAndReviewsProps> = ({
           {trustGuarantees.map((item, idx) => (
             <div
               key={idx}
+              className="trust-pillar-card"
               style={{
                 padding: '1.5rem',
                 borderRadius: '16px',
@@ -420,6 +422,7 @@ export const HomeTrustAndReviews: React.FC<HomeTrustAndReviewsProps> = ({
           {/* Left Arrow Button */}
           <button
             type="button"
+            className="carousel-arrow-btn carousel-arrow-left"
             onClick={prevReview}
             disabled={reviews.length <= cardsPerView}
             style={{
@@ -460,6 +463,7 @@ export const HomeTrustAndReviews: React.FC<HomeTrustAndReviewsProps> = ({
           {/* Right Arrow Button */}
           <button
             type="button"
+            className="carousel-arrow-btn carousel-arrow-right"
             onClick={nextReview}
             disabled={reviews.length <= cardsPerView}
             style={{

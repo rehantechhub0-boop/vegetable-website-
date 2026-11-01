@@ -16,6 +16,7 @@ interface GenuineGoogleButtonProps {
 export const GenuineGoogleButton: React.FC<GenuineGoogleButtonProps> = ({
   onSuccess,
   onError,
+  onOpenFallbackModal,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [clientId, setClientId] = useState<string>('285233251337-641rhcmggf678i265umm9hf5r24befm6.apps.googleusercontent.com');
@@ -170,13 +171,24 @@ export const GenuineGoogleButton: React.FC<GenuineGoogleButtonProps> = ({
     }
   };
 
-  // Direct click handler: Triggers Google's real OAuth popup window
+  // Direct click handler: Triggers Google's real OAuth popup window with instant fallback
   const handleDirectGoogleSignIn = () => {
-    if (tokenClientRef.current) {
-      setLoading(true);
-      tokenClientRef.current.requestAccessToken({ prompt: 'select_account' });
-    } else if (window.google?.accounts?.id) {
-      window.google.accounts.id.prompt();
+    try {
+      if (tokenClientRef.current) {
+        setLoading(true);
+        tokenClientRef.current.requestAccessToken({ prompt: 'select_account' });
+        return;
+      }
+      if (window.google?.accounts?.id) {
+        window.google.accounts.id.prompt();
+        return;
+      }
+    } catch (e) {
+      console.warn('Google Identity Services popup error:', e);
+    }
+
+    if (onOpenFallbackModal) {
+      onOpenFallbackModal();
     } else {
       // Direct redirect to Google OAuth endpoint as fallback
       window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(

@@ -262,6 +262,13 @@ export default function App() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : false));
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
@@ -537,25 +544,25 @@ export default function App() {
         <div className="container nav-container">
 
           {/* Brand */}
-          <a className="nav-brand" onClick={(e) => { e.preventDefault(); navigate('/'); }} href="/" aria-label="Home" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', textDecoration: 'none' }}>
+          <a className="nav-brand" onClick={(e) => { e.preventDefault(); navigate('/'); }} href="/" aria-label="Home">
             {settings?.logoUrl ? (
               <img
                 src={settings.logoUrl}
                 alt={brandName}
-                style={{ height: '42px', width: 'auto', maxHeight: '42px', objectFit: 'contain', borderRadius: '8px' }}
+                className="nav-brand-custom-logo"
               />
             ) : (
               <div className="nav-logo-icon">
-                <Leaf size={24} />
+                <Leaf size={22} />
               </div>
             )}
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <p className="nav-brand-title" style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: 'var(--primary-900)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+            <div className="nav-brand-text-wrap">
+              <span className="nav-brand-title">
                 {brandName}
-              </p>
-              <p className="nav-brand-tagline" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.2, whiteSpace: 'nowrap' }}>
+              </span>
+              <span className="nav-brand-tagline">
                 {settings?.brandTagline || 'Farm-to-doorstep delivery'}
-              </p>
+              </span>
             </div>
           </a>
 
@@ -670,7 +677,7 @@ export default function App() {
             </button>
 
             {authUser ? (
-              <div className="nav-user-dropdown-wrap" ref={userMenuRef}>
+              <div className="nav-user-dropdown-wrap nav-desktop-auth" ref={userMenuRef}>
                 <button
                   type="button"
                   className={`nav-user-trigger-btn ${userMenuOpen ? 'active' : ''}`}
@@ -679,7 +686,7 @@ export default function App() {
                   aria-label="User Account Menu"
                 >
                   <User size={16} />
-                  <span>{authUser.name.split(' ')[0]}</span>
+                  <span className="nav-user-name">{authUser.name.split(' ')[0]}</span>
                   <ChevronDown
                     size={13}
                     style={{
@@ -750,7 +757,7 @@ export default function App() {
             ) : (
               <button
                 type="button"
-                className="nav-icon-btn"
+                className="nav-icon-btn nav-desktop-auth"
                 aria-label="Login"
                 onClick={() => navigate('/login')}
               >
@@ -766,7 +773,7 @@ export default function App() {
               onClick={() => setMobileNavOpen(p => !p)}
               aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
             >
-              {mobileNavOpen ? <X size={22} /> : <Menu size={22} />}
+              {mobileNavOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
           </div>
         </div>
@@ -1105,7 +1112,7 @@ export default function App() {
             ) : (
               <>
                 <div className="product-grid featured-homepage-grid">
-                  {filteredVeg.slice(0, 8).map(veg => (
+                  {filteredVeg.slice(0, isMobile ? 4 : 8).map(veg => (
                     <VegetableCard
                       key={veg.id}
                       vegetable={veg}
