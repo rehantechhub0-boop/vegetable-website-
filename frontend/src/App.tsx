@@ -943,13 +943,29 @@ export default function App() {
         <LoginPage
           onNavigateHome={() => navigate('/')}
           onNavigateRegister={() => navigate('/register')}
-          onSuccess={() => navigate('/account')}
+          onSuccess={() => {
+            const redirect = sessionStorage.getItem('redirect_after_auth');
+            if (redirect) {
+              sessionStorage.removeItem('redirect_after_auth');
+              navigate(redirect);
+            } else {
+              navigate('/account');
+            }
+          }}
         />
       ) : currentPath === '/register' ? (
         <RegisterPage
           onNavigateHome={() => navigate('/')}
           onNavigateLogin={() => navigate('/login')}
-          onSuccess={() => navigate('/account')}
+          onSuccess={() => {
+            const redirect = sessionStorage.getItem('redirect_after_auth');
+            if (redirect) {
+              sessionStorage.removeItem('redirect_after_auth');
+              navigate(redirect);
+            } else {
+              navigate('/account');
+            }
+          }}
         />
       ) : currentPath === '/account' || currentPath === '/account/orders/:orderNumber' ? (
         authUser ? (
@@ -963,7 +979,15 @@ export default function App() {
           <LoginPage
             onNavigateHome={() => navigate('/')}
             onNavigateRegister={() => navigate('/register')}
-            onSuccess={() => navigate('/account')}
+            onSuccess={() => {
+              const redirect = sessionStorage.getItem('redirect_after_auth');
+              if (redirect) {
+                sessionStorage.removeItem('redirect_after_auth');
+                navigate(redirect);
+              } else {
+                navigate('/account');
+              }
+            }}
           />
         )
       ) : currentPath === '/cart' ? (

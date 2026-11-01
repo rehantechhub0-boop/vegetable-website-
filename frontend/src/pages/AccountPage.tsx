@@ -87,34 +87,68 @@ export const AccountPage: React.FC<AccountPageProps> = ({
         });
 
         const data = await res.json();
-        if (mounted) {
-          if (res.ok && data.success) {
-            setOrders(data.data);
-            if (activeOrderNumber) {
-              const match = data.data.find(
-                (o: CustomerOrderSummary) => o.orderNumber.toLowerCase() === activeOrderNumber.toLowerCase()
-              );
-              if (match) {
-                setSelectedOrder(match);
-              } else {
-                // Fetch direct order to enforce backend ownership verification
-                try {
-                  const singleRes = await fetch(`/api/v1/orders/${encodeURIComponent(activeOrderNumber)}`, {
-                    credentials: 'include',
+        let fetchedOrders: CustomerOrderSummary[] = [];
+        if (res.ok && data.success && Array.isArray(data.data)) {
+          fetchedOrders = data.data;
+        }
+
+        // Merge with locally stored customer orders (to prevent order gaps or session loss)
+        try {
+          const stored = localStorage.getItem('veggie_customer_orders');
+          if (stored) {
+            const localOrders = JSON.parse(stored);
+            if (Array.isArray(localOrders)) {
+              for (const lo of localOrders) {
+                if (lo.orderNumber && !fetchedOrders.some((fo) => fo.orderNumber?.toUpperCase() === lo.orderNumber.toUpperCase())) {
+                  fetchedOrders.push({
+                    id: lo.id || Math.floor(Math.random() * 9000) + 1000,
+                    orderNumber: lo.orderNumber,
+                    orderStatus: lo.orderStatus || 'NEW',
+                    paymentStatus: lo.paymentStatus || 'COD',
+                    paymentMethod: lo.paymentMethod || 'COD',
+                    subtotal: lo.subtotal || 0,
+                    deliveryFee: lo.deliveryFee || 0,
+                    grandTotal: lo.grandTotal || 0,
+                    customerName: lo.customerName || user.name,
+                    customerPhone: lo.customerPhone || user.phone || '',
+                    deliveryZone: lo.deliveryZone || 'Muzaffargarh',
+                    deliveryAddress: lo.deliveryAddress || '',
+                    deliveryNotes: lo.deliveryNotes || null,
+                    createdAt: lo.createdAt || new Date().toISOString(),
+                    itemsCount: lo.items?.length || 0,
+                    items: lo.items || [],
                   });
-                  const singleData = await singleRes.json();
-                  if (singleRes.ok && singleData.success && singleData.order) {
-                    setSelectedOrder(singleData.order);
-                  } else {
-                    setOrdersError(singleData.error || 'Order not found or you do not have permission to view this order.');
-                  }
-                } catch {
-                  setOrdersError('Failed to load order details.');
                 }
               }
             }
-          } else {
-            setOrdersError(data.error || 'Failed to load order history.');
+          }
+        } catch (e) {
+          console.warn('Local orders cache read error:', e);
+        }
+
+        fetchedOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        if (mounted) {
+          setOrders(fetchedOrders);
+          if (activeOrderNumber) {
+            const match = fetchedOrders.find(
+              (o: CustomerOrderSummary) => o.orderNumber.toLowerCase() === activeOrderNumber.toLowerCase()
+            );
+            if (match) {
+              setSelectedOrder(match);
+            } else {
+              try {
+                const singleRes = await fetch(`/api/v1/orders/${encodeURIComponent(activeOrderNumber)}`, {
+                  credentials: 'include',
+                });
+                const singleData = await singleRes.json();
+                if (singleRes.ok && singleData.success && singleData.order) {
+                  setSelectedOrder(singleData.order);
+                }
+              } catch {
+                console.warn('Direct order fetch warning');
+              }
+            }
           }
         }
       } catch (e) {

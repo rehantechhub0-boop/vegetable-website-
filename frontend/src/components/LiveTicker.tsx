@@ -23,54 +23,61 @@ export const LiveTicker: React.FC<LiveTickerProps> = ({
 
   const tickerItems = [
     {
-      badge: 'LIVE MANDI',
-      text: 'Subah ki taaza sabzi mandiyon se pohnch chuki hai — 100% Taaza & Khalis!',
+      badge: 'TAAZA MANDI',
+      text: 'Muzaffargarh ki No. 1 Taaza Sabzi Express Service — Mandi se seedha aapke ghar!',
       icon: <Leaf size={13} className="text-emerald-400" />,
       color: '#10b981',
     },
     {
-      badge: 'TODAY DEALS',
-      text: 'Aloo (Farm Fresh) par Flat 20% Discount — Sirf Rs. 95/kg!',
-      icon: <Flame size={13} className="text-amber-400" />,
-      color: '#f59e0b',
-    },
-    {
       badge: 'EXPRESS DROP',
-      text: '30-45 Minute me Muzaffargarh ke tamam ilaaqon me Cash on Delivery!',
+      text: '30 se 45 Minute me Tez Tareen Doorstep Delivery tamam ilaaqon mein!',
       icon: <Truck size={13} className="text-cyan-400" />,
       color: '#06b6d4',
     },
     {
-      badge: 'ZERO ADVANCE',
-      text: 'Pehle sabzi check karein, phir cash ada karein — 100% COD Guarantee!',
+      badge: 'CASH ON DELIVERY',
+      text: 'Pehle sabzi check karein, wazan tasalli karein, phir cash ada karein — 100% COD Guarantee!',
       icon: <ShieldCheck size={13} className="text-emerald-400" />,
       color: '#10b981',
     },
     {
+      badge: 'ROZANA DEALS',
+      text: 'Aloo, Pyaz aur Tamatar par Special Mandi Wholesale Rates rozana subah dastiyab!',
+      icon: <Flame size={13} className="text-amber-400" />,
+      color: '#f59e0b',
+    },
+    {
       badge: 'FREE DELIVERY',
-      text: 'Rs. 1,000 se zayed ke kisi bhi order par delivery bilkul MUFT!',
+      text: 'Rs. 1,000 se zayed ke kisi bhi order par Home Delivery bilkul MUFT!',
       icon: <Sparkles size={13} className="text-amber-400" />,
       color: '#fbbf24',
     },
     {
-      badge: 'TAAZGI GUARANTEE',
-      text: 'Kharab sabzi par fori exchange ya refund ki sahulat dastiyab hai.',
+      badge: 'ZERO DISCREPANCY',
+      text: 'Digital certified tarazu se safe packing — har gram pura aur accurate wazan!',
       icon: <Leaf size={13} className="text-emerald-400" />,
+      color: '#10b981',
+    },
+    {
+      badge: 'ALL SECTORS',
+      text: 'Jhang Road, Alipur Road, City Center, Multan Road, Civil Lines & Railway Road par dastiabi!',
+      icon: <Truck size={13} className="text-cyan-400" />,
+      color: '#06b6d4',
+    },
+    {
+      badge: 'MADAD & HELPLINE',
+      text: 'Kisi bhi sawal ya order madad ke liye rabta karein: 0342-7883728 (Call & WhatsApp)',
+      icon: <Phone size={13} className="text-emerald-400" />,
       color: '#10b981',
     },
   ];
 
   return (
-    <div className="live-ticker-bar" aria-label="Live Mandi News Ticker">
-      <div className="live-ticker-badge-wrap">
-        <span className="live-ticker-dot" />
-        <span className="live-ticker-badge-title">LIVE UPDATES</span>
-      </div>
-
-      {/* Infinitely Scrolling Marquee Track */}
+    <div className="live-ticker-bar" aria-label="Mandi News Ticker">
+      {/* Infinitely Scrolling Marquee Track taking full width */}
       <div className="live-ticker-track-container">
         <div className="live-ticker-track">
-          {/* First loop */}
+          {/* Loop 1 */}
           {tickerItems.map((item, idx) => (
             <div key={`loop1-${idx}`} className="live-ticker-item">
               <span
@@ -102,7 +109,7 @@ export const LiveTicker: React.FC<LiveTickerProps> = ({
         </div>
       </div>
 
-      {/* Right side contact pill showing ONLY telephone helpline */}
+      {/* Right side contact pill showing telephone helpline */}
       <div className="live-ticker-contact-wrap">
         <a
           href={`tel:${displayPhone.replace(/[^0-9+]/g, '')}`}

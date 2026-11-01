@@ -795,8 +795,13 @@ app.patch('/api/v1/profile', requireAuth, async (req: AuthenticatedRequest, res:
 // Customer My Orders
 app.get('/api/v1/orders/my-orders', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const userRecord = await prisma.user.findUnique({ where: { id: req.user!.id } });
+    const whereConditions: any[] = [{ userId: req.user!.id }];
+    if (userRecord?.phone) {
+      whereConditions.push({ customerPhone: userRecord.phone });
+    }
     const orders = await prisma.order.findMany({
-      where: { userId: req.user!.id },
+      where: { OR: whereConditions },
       include: {
         deliveryZone: true,
         items: true,
@@ -1155,9 +1160,35 @@ app.post('/api/v1/orders', optionalAuth, async (req: AuthenticatedRequest, res: 
       });
     }
 
-    // Attach authenticated user ID if logged in (guest orders pass undefined/null)
-    const authenticatedUserId = req.user?.id || null;
+    // Attach authenticated user ID if logged in (or auto-link existing registered user by phone)
+    const phoneInput = parseResult.data.customer.phone;
+    let authenticatedUserId = req.user?.id || null;
+    if (!authenticatedUserId && phoneInput) {
+      const matchedUser = await prisma.user.findFirst({
+        where: { phone: phoneInput },
+      });
+      if (matchedUser) {
+        authenticatedUserId = matchedUser.id;
+      }
+    }
+
     const result = await createOrder(prisma, parseResult.data, authenticatedUserId);
+
+    // If customer has an authenticated account, link phone and backfill any orphan guest orders
+    if (authenticatedUserId && phoneInput) {
+      try {
+        await prisma.user.update({
+          where: { id: authenticatedUserId },
+          data: { phone: phoneInput },
+        });
+        await prisma.order.updateMany({
+          where: { customerPhone: phoneInput, userId: null },
+          data: { userId: authenticatedUserId },
+        });
+      } catch (linkingErr) {
+        console.warn('[Order User Linking Warn]:', linkingErr);
+      }
+    }
 
     const logTag = result.replayed ? 'Replayed (idempotent)' : 'Created';
     console.log(`[Order ${logTag}]: ${result.order.orderNumber} (User: ${authenticatedUserId || 'GUEST'}) - Total: Rs. ${result.order.grandTotal}`);

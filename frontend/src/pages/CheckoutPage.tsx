@@ -71,6 +71,8 @@ export interface PriceChangeItem {
 }
 
 import { useAuthStore } from '../store/authStore';
+import { GenuineGoogleButton } from '../components/GenuineGoogleButton';
+import { GoogleSignInModal } from '../components/GoogleSignInModal';
 
 /** Generate a cryptographically random idempotency key. */
 function generateIdempotencyKey(): string {
@@ -85,6 +87,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   onNavigateCart,
 }) => {
   const { user } = useAuthStore();
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
 
   // Form State (Pre-filled if logged in)
   const [name, setName] = useState(user?.name || '');
@@ -333,6 +336,12 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
         })),
       };
 
+      if (!user) {
+        setErrorMessage('Order place karne se pehle Login ya Register karna zaroori hai.');
+        setSubmitting(false);
+        return;
+      }
+
       const res = await fetch('/api/v1/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -360,7 +369,15 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
         return;
       }
 
-      // Order created or replayed successfully
+      // Order created or replayed successfully - cache locally to guarantee order number visibility
+      try {
+        const stored = localStorage.getItem('veggie_customer_orders');
+        const list = stored ? JSON.parse(stored) : [];
+        const merged = [data.order, ...list.filter((o: any) => o.orderNumber !== data.order.orderNumber)];
+        localStorage.setItem('veggie_customer_orders', JSON.stringify(merged.slice(0, 25)));
+      } catch (cacheErr) {
+        console.warn('Order cache warning:', cacheErr);
+      }
       onOrderSuccess(data.order);
     } catch (err: any) {
       setErrorMessage('Unable to place your order right now. Please check your connection and try again.');
@@ -916,24 +933,78 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                 )}
               </div>
 
-              {/* Place Order CTA on mobile/desktop form */}
-              <button
-                type="submit"
-                id="place-order-btn"
-                className="btn btn-primary checkout-submit-btn"
-                disabled={submitting || loadingZones || Boolean(zonesError)}
-              >
-                {submitting ? (
-                  <>
-                    <div className="checkout-spinner" aria-hidden="true" />
-                    Placing Order…
-                  </>
-                ) : (
-                  <>
-                    Place Order (Rs. {grandTotal.toLocaleString()})
-                  </>
-                )}
-              </button>
+              {/* Logged in status or Mandatory Auth CTA */}
+              {!user ? (
+                <div className="checkout-auth-required-box" role="region" aria-label="Login Required">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#92400e', fontWeight: 800, fontSize: '0.95rem', marginBottom: '6px' }}>
+                    <LockIcon size={20} className="text-amber-600" />
+                    <span>Order Place Karne Ke Liye Login / Register Laazmi Hai</span>
+                  </div>
+                  <p style={{ fontSize: '0.82rem', color: '#78350f', marginBottom: '14px', lineHeight: 1.45 }}>
+                    Apne Google account ya Gmail se sign in karein taake aapka <strong>Order Number</strong> aapke account me mehfooz rahe aur aap usko live track kar sakein.
+                  </p>
+                  
+                  <div style={{ marginBottom: '10px' }}>
+                    <GenuineGoogleButton
+                      onSuccess={() => {}}
+                      onOpenFallbackModal={() => setShowGoogleModal(true)}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      style={{ flex: 1, fontSize: '0.8rem', padding: '0.5rem', background: '#fff' }}
+                      onClick={() => {
+                        window.sessionStorage.setItem('redirect_after_auth', '/checkout');
+                        window.history.pushState({}, '', '/login');
+                        window.dispatchEvent(new PopStateEvent('popstate'));
+                      }}
+                    >
+                      Email Login
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      style={{ flex: 1, fontSize: '0.8rem', padding: '0.5rem' }}
+                      onClick={() => {
+                        window.sessionStorage.setItem('redirect_after_auth', '/checkout');
+                        window.history.pushState({}, '', '/register');
+                        window.dispatchEvent(new PopStateEvent('popstate'));
+                      }}
+                    >
+                      Naya Account Banayein
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="checkout-user-verified-badge">
+                    <CheckCircle2 size={18} className="text-emerald-600 flex-shrink-0" />
+                    <span>Logged in as <strong>{user.name}</strong> ({user.email}) • Order history will be saved to your account.</span>
+                  </div>
+
+                  {/* Place Order CTA */}
+                  <button
+                    type="submit"
+                    id="place-order-btn"
+                    className="btn btn-primary checkout-submit-btn"
+                    disabled={submitting || loadingZones || Boolean(zonesError)}
+                  >
+                    {submitting ? (
+                      <>
+                        <div className="checkout-spinner" aria-hidden="true" />
+                        Placing Order…
+                      </>
+                    ) : (
+                      <>
+                        Place Order (Rs. {grandTotal.toLocaleString()})
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
             </form>
           </section>
 
@@ -1076,6 +1147,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
           </aside>
         </div>
       </div>
+      <GoogleSignInModal isOpen={showGoogleModal} onClose={() => setShowGoogleModal(false)} onSuccess={() => setShowGoogleModal(false)} />
     </main>
   );
 };

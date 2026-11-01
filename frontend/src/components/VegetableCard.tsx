@@ -386,7 +386,7 @@ export const VegetableCard: React.FC<VegetableCardProps> = ({
               }`}
               onClick={() => setWeightMode('custom')}
             >
-              Bulk (&gt;10kg)
+              Bulk
             </button>
           </div>
 

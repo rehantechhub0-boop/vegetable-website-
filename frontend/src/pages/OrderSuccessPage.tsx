@@ -1,4 +1,4 @@
-import type React from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   CheckCircle,
   ShoppingBag,
@@ -9,6 +9,8 @@ import {
   Phone,
   ShieldCheck,
   Scale,
+  Copy,
+  Check,
 } from 'lucide-react';
 import type { ConfirmedOrder } from './CheckoutPage';
 
@@ -19,10 +21,29 @@ interface OrderSuccessPageProps {
 }
 
 export const OrderSuccessPage: React.FC<OrderSuccessPageProps> = ({
-  order,
+  order: propOrder,
   onNavigateShop,
   onNavigateTracking,
 }) => {
+  const [copied, setCopied] = useState(false);
+
+  // Fallback to sessionStorage / localStorage so refreshing the page NEVER loses the order number!
+  const order = useMemo(() => {
+    if (propOrder) return propOrder;
+    try {
+      const sess = sessionStorage.getItem('veggie_last_order');
+      if (sess) return JSON.parse(sess);
+    } catch {}
+    try {
+      const stored = localStorage.getItem('veggie_customer_orders');
+      if (stored) {
+        const list = JSON.parse(stored);
+        if (Array.isArray(list) && list.length > 0) return list[0];
+      }
+    } catch {}
+    return null;
+  }, [propOrder]);
+
   if (!order) {
     return (
       <main className="cart-page-wrapper" id="order-success-main">
@@ -33,21 +54,43 @@ export const OrderSuccessPage: React.FC<OrderSuccessPageProps> = ({
             </div>
             <h1 className="cart-empty-title">Order Received</h1>
             <p className="cart-empty-subtitle">
-              Your order information is being processed. If you just placed an order, please review your recent orders.
+              Your order information is being processed. You can review your orders and tracking in your account.
             </p>
-            <button
-              type="button"
-              className="btn btn-primary cart-browse-btn"
-              onClick={onNavigateShop}
-            >
-              Continue Shopping
-              <ArrowRight size={18} />
-            </button>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '1rem' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => {
+                  window.history.pushState({}, '', '/account');
+                  window.dispatchEvent(new PopStateEvent('popstate'));
+                }}
+              >
+                View My Orders
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary cart-browse-btn"
+                onClick={onNavigateShop}
+              >
+                Continue Shopping
+                <ArrowRight size={18} />
+              </button>
+            </div>
           </div>
         </div>
       </main>
     );
   }
+
+  const handleCopyOrderNumber = () => {
+    try {
+      navigator.clipboard.writeText(order.orderNumber);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch (e) {
+      console.warn('Copy failed:', e);
+    }
+  };
 
   return (
     <main className="order-success-page-wrapper" id="order-success-main">
@@ -59,13 +102,53 @@ export const OrderSuccessPage: React.FC<OrderSuccessPageProps> = ({
           </div>
           <h1 className="order-success-title">Order Confirmed!</h1>
           <p className="order-success-subtitle">
-            Thank you, <strong>{order.customerName}</strong>! Your fresh vegetable order has been placed successfully and is being prepared for doorstep delivery in Muzaffargarh.
+            Shukriya, <strong>{order.customerName}</strong>! Aapka fresh vegetables ka order Muzaffargarh me dispatch ke liye receive ho chuka hai.
           </p>
+
+          {/* Prominent High-Visibility Order Number Box */}
+          <div className="order-success-number-hero">
+            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#047857', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Aapka Order Number (Save / Note Karein)
+            </div>
+            <div className="order-success-big-num" id="confirmed-order-number">
+              {order.orderNumber}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', flexWrap: 'wrap', marginTop: '6px' }}>
+              <button
+                type="button"
+                className="order-copy-btn"
+                onClick={handleCopyOrderNumber}
+                title="Click to copy order number"
+              >
+                {copied ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
+                <span>{copied ? 'Copied to Clipboard!' : 'Copy Order Number'}</span>
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ fontSize: '0.82rem', padding: '0.4rem 1.1rem', display: 'inline-flex', alignItems: 'center', gap: '6px', borderRadius: '9999px' }}
+                onClick={() => {
+                  if (onNavigateTracking) {
+                    onNavigateTracking(order.orderNumber, order.uuid);
+                  } else {
+                    window.history.pushState({}, '', `/track-order?orderNumber=${encodeURIComponent(order.orderNumber)}`);
+                    window.dispatchEvent(new PopStateEvent('popstate'));
+                  }
+                }}
+              >
+                <Truck size={14} />
+                <span>Track Live Order</span>
+              </button>
+            </div>
+            <p style={{ fontSize: '0.82rem', color: '#047857', marginTop: '10px', fontWeight: 600 }}>
+              ✔ Yeh order aapke account ki <strong>Order History (/account)</strong> mein save ho chuka hai.
+            </p>
+          </div>
 
           <div className="order-success-meta-chips">
             <div className="order-meta-chip">
               <span className="order-meta-chip-label">Order Number</span>
-              <span className="order-meta-chip-value" id="confirmed-order-number">{order.orderNumber}</span>
+              <span className="order-meta-chip-value">{order.orderNumber}</span>
             </div>
             <div className="order-meta-chip">
               <span className="order-meta-chip-label">Payment</span>
@@ -88,7 +171,7 @@ export const OrderSuccessPage: React.FC<OrderSuccessPageProps> = ({
             </h2>
 
             <div className="order-confirmed-items-list" role="list">
-              {order.items.map((item) => (
+              {order.items.map((item: any) => (
                 <div key={item.id} className="order-confirmed-item" role="listitem">
                   <div className="order-confirmed-item-img-wrap">
                     <img
@@ -185,7 +268,7 @@ export const OrderSuccessPage: React.FC<OrderSuccessPageProps> = ({
               <div>
                 <p className="order-trust-callout-title">Cash on Delivery Verified</p>
                 <p className="order-trust-callout-text">
-                  Please keep exact cash ready (Rs. {order.grandTotal.toLocaleString()}). Our delivery partner will hand over your packed fresh vegetables.
+                  Please keep exact cash ready (Rs. {order.grandTotal.toLocaleString()}). Pehle sabzi check karein phir rider ko payment karein.
                 </p>
               </div>
             </div>
@@ -210,6 +293,9 @@ export const OrderSuccessPage: React.FC<OrderSuccessPageProps> = ({
             onClick={() => {
               if (onNavigateTracking) {
                 onNavigateTracking(order.orderNumber, order.uuid);
+              } else {
+                window.history.pushState({}, '', `/track-order?orderNumber=${encodeURIComponent(order.orderNumber)}`);
+                window.dispatchEvent(new PopStateEvent('popstate'));
               }
             }}
           >

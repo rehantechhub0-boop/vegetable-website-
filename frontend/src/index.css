@@ -192,15 +192,15 @@ button, input, select, textarea {
 
 @media (max-width: 860px) {
   .product-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.85rem !important;
   }
 }
 
 @media (max-width: 560px) {
   .product-grid {
-    grid-template-columns: 1fr;
-    gap: 1.25rem;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.55rem !important;
   }
 }
 
@@ -11977,6 +11977,154 @@ button, input, select, textarea {
   .carousel-arrow-right {
     right: 2px !important;
   }
+
+  /* 8. Mobile 2-Column Vegetable Cards Optimization */
+  .vip-vegetable-card {
+    border-radius: 14px !important;
+  }
+  .vip-card-media-wrap {
+    height: 125px !important;
+  }
+  .vip-card-body {
+    padding: 0.55rem 0.45rem !important;
+  }
+  .vip-card-title-group {
+    margin-bottom: 0.35rem !important;
+  }
+  .vip-card-title {
+    font-size: 0.84rem !important;
+    margin-bottom: 0.15rem !important;
+    line-height: 1.25 !important;
+    -webkit-line-clamp: 1 !important;
+  }
+  .vip-card-description {
+    display: none !important;
+  }
+  .vip-card-rate-row {
+    padding: 0.3rem 0.4rem !important;
+    margin-bottom: 0.35rem !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 2px !important;
+  }
+  .vip-rate-label {
+    font-size: 0.6rem !important;
+  }
+  .vip-rate-current {
+    font-size: 0.95rem !important;
+  }
+  .vip-rate-unit {
+    font-size: 0.68rem !important;
+  }
+  .vip-rate-availability {
+    font-size: 0.64rem !important;
+  }
+  .vip-card-weight-section {
+    margin-bottom: 0.35rem !important;
+  }
+  .vip-weight-header {
+    font-size: 0.68rem !important;
+    margin-bottom: 0.2rem !important;
+  }
+  .vip-weight-title {
+    font-size: 0.66rem !important;
+  }
+  .vip-weight-active-tag {
+    font-size: 0.6rem !important;
+    padding: 0.05rem 0.3rem !important;
+  }
+  .vip-weight-chips-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 0.18rem !important;
+  }
+  .vip-weight-chip {
+    padding: 0.22rem 0.1rem !important;
+    font-size: 0.63rem !important;
+    border-radius: 5px !important;
+  }
+  .vip-card-price-bar {
+    padding: 0.28rem 0.35rem !important;
+    margin-bottom: 0.35rem !important;
+  }
+  .vip-breakdown-formula {
+    font-size: 0.64rem !important;
+  }
+  .vip-total-price {
+    font-size: 0.88rem !important;
+  }
+  .vip-btn-add-cart {
+    padding: 0.42rem 0.35rem !important;
+    font-size: 0.76rem !important;
+    border-radius: 8px !important;
+  }
+  .vip-pill-badge {
+    padding: 0.12rem 0.35rem !important;
+    font-size: 0.6rem !important;
+  }
+}
+
+/* ── MANDATORY CHECKOUT AUTH & ORDER VISIBILITY ── */
+.checkout-auth-required-box {
+  background: #fffbeb;
+  border: 1.5px solid #fde68a;
+  border-radius: 14px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.08);
+}
+
+.checkout-user-verified-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  font-size: 0.86rem;
+  margin-bottom: 1.25rem;
+}
+
+.order-success-number-hero {
+  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+  border: 2px dashed #059669;
+  border-radius: 16px;
+  padding: 1.5rem;
+  text-align: center;
+  margin: 1.25rem 0 1.75rem;
+  box-shadow: 0 6px 20px rgba(5, 150, 105, 0.08);
+}
+
+.order-success-big-num {
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: #047857;
+  letter-spacing: 0.04em;
+  font-family: 'JetBrains Mono', monospace;
+  margin: 0.5rem 0;
+  display: inline-block;
+}
+
+.order-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #ffffff;
+  color: #065f46;
+  border: 1.5px solid #a7f3d0;
+  padding: 0.35rem 0.85rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-left: 0.6rem;
+}
+
+.order-copy-btn:hover {
+  background: #ecfdf5;
+  border-color: #059669;
 }
 
 
