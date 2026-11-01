@@ -2,7 +2,7 @@ import { MouseGlow } from './components/MouseGlow';
 import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { HomeTrustAndReviews } from './components/HomeTrustAndReviews';
 import { CustomerSupportModal } from './components/CustomerSupportModal';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, lazy, Suspense } from 'react';
 import type React from 'react';
 import {
   Leaf, ShoppingBag, Phone, Truck, ShieldCheck,
@@ -16,17 +16,21 @@ import { MandiNewsAndDeals } from './components/MandiNewsAndDeals';
 import { AboutAndServiceSection } from './components/AboutAndServiceSection';
 import { SabziAIWidget } from './components/SabziAIWidget';
 import { BackToTop } from './components/BackToTop';
-import { VegetablesPage } from './pages/VegetablesPage';
-import { ProductDetailPage } from './pages/ProductDetailPage';
-import { CartPage } from './pages/CartPage';
-import { CheckoutPage, ConfirmedOrder } from './pages/CheckoutPage';
-import { OrderSuccessPage } from './pages/OrderSuccessPage';
-import { LoginPage } from './pages/LoginPage';
-import { RegisterPage } from './pages/RegisterPage';
-import { AccountPage } from './pages/AccountPage';
-import { TrackOrderPage } from './pages/TrackOrderPage';
-import { AdminLayout, AdminSection } from './pages/admin/AdminLayout';
+import type { ConfirmedOrder } from './pages/CheckoutPage';
+import type { AdminSection } from './pages/admin/AdminLayout';
 import { useAuthStore } from './store/authStore';
+
+/* ── Code-Splitting Lazy Chunk Imports (Fast 0ms mobile load) ── */
+const VegetablesPage = lazy(() => import('./pages/VegetablesPage').then(m => ({ default: m.VegetablesPage })));
+const ProductDetailPage = lazy(() => import('./pages/ProductDetailPage').then(m => ({ default: m.ProductDetailPage })));
+const CartPage = lazy(() => import('./pages/CartPage').then(m => ({ default: m.CartPage })));
+const CheckoutPage = lazy(() => import('./pages/CheckoutPage').then(m => ({ default: m.CheckoutPage })));
+const OrderSuccessPage = lazy(() => import('./pages/OrderSuccessPage').then(m => ({ default: m.OrderSuccessPage })));
+const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
+const RegisterPage = lazy(() => import('./pages/RegisterPage').then(m => ({ default: m.RegisterPage })));
+const AccountPage = lazy(() => import('./pages/AccountPage').then(m => ({ default: m.AccountPage })));
+const TrackOrderPage = lazy(() => import('./pages/TrackOrderPage').then(m => ({ default: m.TrackOrderPage })));
+const AdminLayout = lazy(() => import('./pages/admin/AdminLayout').then(m => ({ default: m.AdminLayout })));
 
 /* ────────────────────────────────────────────────────────────────── */
 
@@ -518,14 +522,21 @@ export default function App() {
     }
 
     return (
-      <AdminLayout
-        currentSection={(currentRoute.slug as AdminSection) || 'dashboard'}
-        subParam={currentRoute.orderNumber}
-        onNavigateSection={(sec, param) => {
-          navigate(`/admin/${sec}`, param ? { orderNumber: param } : undefined);
-        }}
-        onNavigateStore={() => navigate('/')}
-      />
+      <Suspense fallback={
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: '1rem', color: 'var(--text-muted)' }}>
+          <Clock size={32} className="spin-icon" color="var(--primary-600)" />
+          <p>Loading Admin Workspace...</p>
+        </div>
+      }>
+        <AdminLayout
+          currentSection={(currentRoute.slug as AdminSection) || 'dashboard'}
+          subParam={currentRoute.orderNumber}
+          onNavigateSection={(sec, param) => {
+            navigate(`/admin/${sec}`, param ? { orderNumber: param } : undefined);
+          }}
+          onNavigateStore={() => navigate('/')}
+        />
+      </Suspense>
     );
   }
 
@@ -941,7 +952,13 @@ export default function App() {
       </div>
 
       {/* ── MAIN CONTENT ─────────────────────────────────────────── */}
-      {currentPath === '/login' ? (
+      <Suspense fallback={
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: '0.85rem', color: '#059669' }}>
+          <Clock size={28} className="checkout-spinner" />
+          <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#64748b' }}>Loading...</span>
+        </div>
+      }>
+        {currentPath === '/login' ? (
         <LoginPage
           onNavigateHome={() => navigate('/')}
           onNavigateRegister={() => navigate('/register')}
@@ -1213,6 +1230,7 @@ export default function App() {
 
       </main>
       )}
+      </Suspense>
 
       {/* ── 8. FOOTER ────────────────────────────────────────────── */}
       <footer id="site-footer" className="site-footer" aria-label="Site footer">

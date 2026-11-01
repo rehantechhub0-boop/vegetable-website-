@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -84,6 +85,9 @@ app.use(helmet({
   contentSecurityPolicy: false, // SPA frontend manages its own CSP; API serves JSON & static assets
   crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allows uploaded images to be rendered by frontend on different origin
 }));
+
+// HTTP Gzip/Deflate compression for fast network payload transfer
+app.use(compression());
 
 // Allowed CORS origins
 const configuredOrigins = process.env.CORS_ORIGIN
