@@ -86,6 +86,12 @@ export const TrackOrderPage: React.FC<TrackOrderPageProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [order, setOrder] = useState<TrackedOrder | null>(null);
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 640 : false));
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Auto-fetch if initialUuid or initialOrderNumber provided
   useEffect(() => {
@@ -229,19 +235,21 @@ export const TrackOrderPage: React.FC<TrackOrderPageProps> = ({
 
         {/* Search Hero (visible when no order loaded or user wants to search another) */}
         {!order && (
-          <div style={{ maxWidth: '820px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          <div style={{ maxWidth: '600px', width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem', boxSizing: 'border-box' }}>
             {/* Top Glow Card */}
             <div
               className="track-order-hero-card"
               style={{
                 position: 'relative',
                 overflow: 'hidden',
-                border: '2px solid #a7f3d0',
-                borderRadius: '24px',
-                padding: '3rem 2.5rem',
-                boxShadow: '0 20px 40px -15px rgba(5, 150, 105, 0.12)',
+                border: '1.5px solid #a7f3d0',
+                borderRadius: isMobile ? '16px' : '24px',
+                padding: isMobile ? '1.5rem 1rem' : '2.5rem 2rem',
+                boxShadow: '0 15px 35px -10px rgba(5, 150, 105, 0.12)',
                 background: 'linear-gradient(180deg, #ffffff 0%, #fafffc 100%)',
                 textAlign: 'center',
+                width: '100%',
+                boxSizing: 'border-box',
               }}
             >
               {/* Decorative top accent line */}
@@ -252,14 +260,14 @@ export const TrackOrderPage: React.FC<TrackOrderPageProps> = ({
                 <span>Live Rider & Order Tracking | Muzaffargarh</span>
               </div>
 
-              <div className="track-order-hero-icon-wrap" aria-hidden="true" style={{ width: '76px', height: '76px', borderRadius: '20px', backgroundColor: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem', boxShadow: '0 8px 20px rgba(16, 185, 129, 0.18)' }}>
-                <Truck size={38} className="track-order-hero-icon" />
+              <div className="track-order-hero-icon-wrap" aria-hidden="true" style={{ width: isMobile ? '60px' : '76px', height: isMobile ? '60px' : '76px', borderRadius: '18px', backgroundColor: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem', boxShadow: '0 8px 20px rgba(16, 185, 129, 0.18)' }}>
+                <Truck size={isMobile ? 30 : 38} className="track-order-hero-icon" />
               </div>
 
-              <h1 className="track-order-hero-title" style={{ fontSize: '2rem', fontWeight: 800, color: '#064e3b', marginBottom: '0.5rem' }}>
+              <h1 className="track-order-hero-title" style={{ fontSize: isMobile ? '1.45rem' : '2rem', fontWeight: 800, color: '#064e3b', marginBottom: '0.45rem', lineHeight: 1.25 }}>
                 Track Your Vegetable Order
               </h1>
-              <p className="track-order-hero-subtitle" style={{ fontSize: '0.95rem', color: '#64748b', maxWidth: '520px', margin: '0 auto 1.5rem auto' }}>
+              <p className="track-order-hero-subtitle" style={{ fontSize: isMobile ? '0.85rem' : '0.95rem', color: '#64748b', maxWidth: '520px', margin: '0 auto 1.25rem auto', lineHeight: 1.45 }}>
                 Apna Order Number ya Phone Number darj karein aur rider ki live location aur delivery status check karein.
               </p>
 
@@ -301,7 +309,7 @@ export const TrackOrderPage: React.FC<TrackOrderPageProps> = ({
               </div>
 
               <form onSubmit={handleManualLookup} className="track-order-form">
-                <div className="track-form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.25rem', textAlign: 'left' }}>
+                <div className="track-form-grid" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: isMobile ? '0.85rem' : '1.25rem', textAlign: 'left', width: '100%', boxSizing: 'border-box' }}>
                   <div className="form-group">
                     <label htmlFor="track-order-num" className="form-label" style={{ fontWeight: 700, fontSize: '0.85rem', color: '#334155' }}>
                       Order Number
@@ -315,7 +323,7 @@ export const TrackOrderPage: React.FC<TrackOrderPageProps> = ({
                         placeholder="e.g. ORD-1001 or 1001"
                         value={orderInput}
                         onChange={(e) => setOrderInput(e.target.value)}
-                        style={{ paddingLeft: '42px', height: '48px', borderRadius: '12px', border: '1.5px solid #cbd5e1', fontSize: '0.92rem' }}
+                        style={{ paddingLeft: '42px', height: '48px', borderRadius: '12px', border: '1.5px solid #cbd5e1', fontSize: '0.92rem', width: '100%', boxSizing: 'border-box' }}
                       />
                     </div>
                   </div>
@@ -333,7 +341,7 @@ export const TrackOrderPage: React.FC<TrackOrderPageProps> = ({
                         placeholder="e.g. 0342-7883728"
                         value={phoneInput}
                         onChange={(e) => setPhoneInput(e.target.value)}
-                        style={{ paddingLeft: '42px', height: '48px', borderRadius: '12px', border: '1.5px solid #cbd5e1', fontSize: '0.92rem' }}
+                        style={{ paddingLeft: '42px', height: '48px', borderRadius: '12px', border: '1.5px solid #cbd5e1', fontSize: '0.92rem', width: '100%', boxSizing: 'border-box' }}
                       />
                     </div>
                   </div>
@@ -387,23 +395,25 @@ export const TrackOrderPage: React.FC<TrackOrderPageProps> = ({
             <div style={{
               backgroundColor: '#ffffff',
               border: '1px solid #e2e8f0',
-              borderRadius: '20px',
-              padding: '2rem 1.75rem',
+              borderRadius: isMobile ? '16px' : '20px',
+              padding: isMobile ? '1.25rem 0.85rem' : '2rem 1.75rem',
               boxShadow: '0 4px 16px rgba(0,0,0,0.03)',
+              width: '100%',
+              boxSizing: 'border-box',
             }}>
-              <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.08em', backgroundColor: '#ecfdf5', padding: '3px 10px', borderRadius: '9999px' }}>
+              <div style={{ textAlign: 'center', marginBottom: isMobile ? '1rem' : '1.5rem' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.08em', backgroundColor: '#ecfdf5', padding: '3px 10px', borderRadius: '9999px' }}>
                   Step-by-Step Delivery Process
                 </span>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', marginTop: '0.5rem', marginBottom: '0.25rem' }}>
+                <h3 style={{ fontSize: isMobile ? '1.1rem' : '1.25rem', fontWeight: 800, color: '#0f172a', marginTop: '0.5rem', marginBottom: '0.25rem' }}>
                   Order Se Delivery Tak Ka Safar
                 </h3>
-                <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0 }}>
+                <p style={{ fontSize: isMobile ? '0.78rem' : '0.85rem', color: '#64748b', margin: 0 }}>
                   Hum rozana har order par in 5 steps ke zariye mukammal taazgi ensure karte hain
                 </p>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', textAlign: 'center' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(130px, 1fr))', gap: isMobile ? '0.65rem' : '1rem', textAlign: 'center', width: '100%', boxSizing: 'border-box' }}>
                 {ORDER_STEPS.map((st, i) => (
                   <div key={st.key} style={{ padding: '0.75rem 0.5rem', borderRadius: '12px', backgroundColor: '#f8fafc', border: '1px solid #f1f5f9' }}>
                     <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#ecfdf5', color: '#059669', fontWeight: 800, fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px auto', border: '1.5px solid #10b981' }}>
@@ -421,7 +431,7 @@ export const TrackOrderPage: React.FC<TrackOrderPageProps> = ({
             </div>
 
             {/* ── 4 TRUST GUARANTEE CARDS ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(220px, 1fr))', gap: isMobile ? '0.75rem' : '1rem', width: '100%', boxSizing: 'border-box' }}>
               <div style={{ padding: '1.25rem', borderRadius: '16px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
                 <div style={{ padding: '8px', borderRadius: '10px', backgroundColor: '#ecfdf5', color: '#059669', flexShrink: 0 }}>
                   <Truck size={22} />

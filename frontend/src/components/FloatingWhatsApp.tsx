@@ -134,8 +134,9 @@ export const FloatingWhatsApp: React.FC<FloatingWhatsAppProps> = ({
         }
         @media (max-width: 640px) {
           .floating-whatsapp-wrap {
-            bottom: 86px;
-            right: 16px;
+            bottom: 20px;
+            left: 16px;
+            right: auto;
           }
           .floating-whatsapp-btn {
             width: 44px;

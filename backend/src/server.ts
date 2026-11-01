@@ -5,7 +5,7 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
 import { getPrismaClient } from './db/prisma.js';
-import { ensureDatabaseReady } from './db/auto-init.js';
+import { ensureDatabaseReady, isDatabaseReady } from './db/auto-init.js';
 import { validateAndCalculateWeight } from './services/weight.service.js';
 import { createOrder, updateOrderStatus, OrderValidationError, IdempotencyConflictError, StalePriceError } from './services/order.service.js';
 import { createOrderSchema } from './schemas/order.schema.js';
@@ -50,6 +50,24 @@ if (process.env.NODE_ENV === 'production' && !process.env.VERCEL) {
 }
 
 export const prisma = getPrismaClient();
+
+// SQLite High Performance WAL & In-Memory Cache Pragmas
+if (!process.env.DATABASE_URL?.startsWith('postgres')) {
+  (async () => {
+    try {
+      await prisma.$executeRawUnsafe('PRAGMA journal_mode = WAL;');
+      await prisma.$executeRawUnsafe('PRAGMA synchronous = NORMAL;');
+      await prisma.$executeRawUnsafe('PRAGMA cache_size = 10000;');
+      await prisma.$executeRawUnsafe('PRAGMA temp_store = MEMORY;');
+    } catch (_) {}
+  })();
+}
+
+// Background database readiness check
+ensureDatabaseReady(prisma).catch((err) => {
+  console.warn('[DB-AUTO-INIT] Startup readiness warning:', err?.message);
+});
+
 export const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -97,10 +115,12 @@ app.use(cors({
 
 // Automatic database initialization middleware
 app.use(async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    await ensureDatabaseReady(prisma);
-  } catch (err: any) {
-    console.warn('[DB-AUTO-INIT] Background readiness warning:', err?.message);
+  if (!isDatabaseReady()) {
+    try {
+      await ensureDatabaseReady(prisma);
+    } catch (err: any) {
+      console.warn('[DB-AUTO-INIT] Background readiness warning:', err?.message);
+    }
   }
   next();
 });

@@ -4,6 +4,10 @@ import { PrismaClient } from '@prisma/client';
 let isReady = false;
 let initPromise: Promise<void> | null = null;
 
+export function isDatabaseReady(): boolean {
+  return isReady;
+}
+
 const DDL_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS "User" (
     "id" TEXT NOT NULL,

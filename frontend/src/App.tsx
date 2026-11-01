@@ -146,6 +146,7 @@ export default function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [logoFailed, setLogoFailed] = useState(false);
   /* ── Routing state ──────────────────────────────────────────────
      Supports: '/' | '/vegetables' | '/vegetables/:slug' | '/cart' | '/checkout' | '/order-success' | '/track-order' | '/login' | '/register' | '/account'
   ─────────────────────────────────────────────────────────────── */
@@ -458,7 +459,7 @@ export default function App() {
     return matchesSearch && matchesHomeCategory(v, homeCategory);
   });
 
-  const brandName = settings?.brandName || 'Veggie House';
+  const brandName = (settings?.brandName && !settings.brandName.toLowerCase().includes('fresh vegetables')) ? settings.brandName : 'Veggie House';
 
   /* ── ADMIN PANEL ROUTE GUARD ──────────────────────────────────────── */
   if (currentPath === '/admin') {
@@ -545,11 +546,12 @@ export default function App() {
 
           {/* Brand */}
           <a className="nav-brand" onClick={(e) => { e.preventDefault(); navigate('/'); }} href="/" aria-label="Home">
-            {settings?.logoUrl ? (
+            {settings?.logoUrl && !logoFailed ? (
               <img
                 src={settings.logoUrl}
                 alt={brandName}
                 className="nav-brand-custom-logo"
+                onError={() => setLogoFailed(true)}
               />
             ) : (
               <div className="nav-logo-icon">
@@ -1220,11 +1222,12 @@ export default function App() {
             {/* Brand column */}
             <div className="footer-brand-col">
               <a href="/" className="footer-brand" onClick={(e) => { e.preventDefault(); navigate('/'); }} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none' }}>
-                {settings?.logoUrl ? (
+                {settings?.logoUrl && !logoFailed ? (
                   <img
                     src={settings.logoUrl}
                     alt={brandName}
                     style={{ height: '36px', width: 'auto', maxHeight: '36px', objectFit: 'contain', borderRadius: '6px' }}
+                    onError={() => setLogoFailed(true)}
                   />
                 ) : (
                   <div className="nav-logo-icon" aria-hidden="true">
